@@ -1,0 +1,3 @@
+a | 2 | example.com/1
+b | 1 | example.com/2
+c | 3 | example.com/3
