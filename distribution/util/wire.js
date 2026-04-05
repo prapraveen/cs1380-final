@@ -13,6 +13,25 @@ const log = require('../util/log.js');
  */
 function createRPC(func) {
   // Write some code...
+
+  const funcId = id.getID(crypto.randomBytes(8).toString('hex'));
+
+  globalThis.distribution.toLocal[funcId] = func;
+
+  const config = globalThis.distribution.node.config;
+
+  const stub = new Function('...args', `
+    const callback = args.pop();
+    const remote = {
+      node: {ip: '${config.ip}', port: ${config.port}},
+      service: 'rpc',
+      method: 'run'
+    };
+    const message = ['${funcId}', args];
+    return globalThis.distribution.local.comm.send(message, remote, callback);
+  `);
+
+  return stub;
 }
 
 /**

@@ -26,6 +26,7 @@ function bootstrap(config) {
     distribution.node.config = config;
   }
   distribution.local = require('./distribution/local/local.js');
+  distribution.toLocal = {};
 
   const {setup} = require('./distribution/all/all.js');
   distribution.all = setup({gid: 'all'});

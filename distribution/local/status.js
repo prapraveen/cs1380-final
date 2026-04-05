@@ -1,5 +1,3 @@
-const distribution = globalThis.distribution;
-const id = require("../util/id");
 // @ts-check
 /**
  * @typedef {import("../types.js").Callback} Callback
@@ -11,38 +9,28 @@ const id = require("../util/id");
  * @param {Callback} callback
  */
 function get(configuration, callback) {
-    if (!configuration) {
-        configuration = "nid"; // make it return NID by default
-    }
-    if (!callback) {
-        callback = () => {};
-    }
-    const config = distribution.node.config;
-    let e = null;
-    let v = null;
-    if (configuration in config) {
-        v = config[configuration];
-    } else if (configuration == "counts") {
-        if (!("counts" in distribution.node)) {
-            distribution.node["counts"] = 0;
-        }
-        // distribution.node["counts"]++;
-        v = distribution.node["counts"];
-    } else if (configuration == "nid") {
-        v = id.getNID(config);
-    } else if (configuration == "sid") {
-        v = id.getSID(config);
-    } else if (configuration == "heapTotal") {
-        v = process.memoryUsage().heapTotal;
-    } else if (configuration == "heapUsed") {
-        v = process.memoryUsage().heapUsed;
-    } else if (configuration == "count") {
-        v = 1; // come back to this
-    } else {
-        e = Error("Item not found.");
-    }
-    callback(e, v);
-};
+  const config = globalThis.distribution.node.config;
+  const id = globalThis.distribution.util.id;
+
+  switch (configuration) {
+    case 'nid':
+      return callback(null, id.getNID(config));
+    case 'sid':
+      return callback(null, id.getSID(config));
+    case 'ip':
+      return callback(null, config.ip);
+    case 'port':
+      return callback(null, config.port);
+    case 'counts':
+      return callback(null, globalThis.distribution.node.counter || 0);
+    case 'heapTotal':
+      return callback(null, process.memoryUsage().heapTotal);
+    case 'heapUsed':
+      return callback(null, process.memoryUsage().heapUsed);
+    default:
+      return callback(new Error(`unknown configuration: ${configuration}`));
+  }
+}
 
 
 /**
@@ -50,14 +38,15 @@ function get(configuration, callback) {
  * @param {Callback} callback
  */
 function spawn(configuration, callback) {
-  callback(new Error('status.spawn not implemented'));
+  return callback(new Error('did not implement'), null);
 }
 
 /**
  * @param {Callback} callback
  */
 function stop(callback) {
-  callback(new Error('status.stop not implemented'));
+  return callback(new Error('did not implement'), null);
 }
 
 module.exports = {get, spawn, stop};
+

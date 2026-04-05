@@ -1,13 +1,9 @@
-const { config } = require("yargs");
-
-const distribution = globalThis.distribution;
 /**
  * @typedef {import("../types").Callback} Callback
  * @typedef {string} ServiceName
  */
 
-const serviceMappings = {};
-
+const services = {};
 
 /**
  * @param {ServiceName | {service: ServiceName, gid?: string}} configuration
@@ -15,21 +11,30 @@ const serviceMappings = {};
  * @returns {void}
  */
 function get(configuration, callback) {
-    if (!callback) {
-        callback = () => {};
-    }
-    let e = null;
-    let s = null;
-    let gid = configuration["gid"] || "local";
-    let service_name = (typeof(configuration) == 'string') ? configuration : configuration["service"];
-    if (service_name in distribution[gid]) {
-        s = distribution[gid][service_name];
-    } else if (service_name in serviceMappings) {
-        s = serviceMappings[service_name];
+  if (typeof configuration === 'string') {
+    if (services[configuration]) {
+      return callback(null, services[configuration]);
     } else {
-        e = Error("Service not found.");
+      return callback(new Error(`unknown service: ${configuration}`));
     }
-    callback(e, s);
+  }
+
+  const {service, gid} = configuration;
+
+  if (!gid || gid === 'local') {
+    if (services[service]) {
+      return callback(null, services[service]);
+    } else {
+      return callback(new Error(`unknown service: ${service}`));
+    }
+  }
+
+  const reqService = globalThis.distribution?.[gid]?.[service];
+  if (reqService) {
+    return callback(null, reqService);
+  } else {
+    return callback(new Error(`unknown service: ${service} in gid: ${gid}`));
+  }
 }
 
 /**
@@ -39,19 +44,8 @@ function get(configuration, callback) {
  * @returns {void}
  */
 function put(service, configuration, callback) {
-    if (!callback) {
-        callback = () => {};
-    }
-    if (!service) {
-        callback(Error("Missing service argument."), null);
-        return;
-    }
-    if (!configuration) {
-        callback(Error("Missing configuration."), null);
-    }
-
-    serviceMappings[configuration] = service;
-    callback(null, configuration);
+  services[configuration] = service;
+  return callback(null, service);
 }
 
 /**
@@ -59,22 +53,13 @@ function put(service, configuration, callback) {
  * @param {Callback} callback
  */
 function rem(configuration, callback) {
-    if (!callback) {
-        callback = () => {};
-    }
-    let e = null;
-    let s = null;
-    if (!configuration) {
-        s = undefined;
-    } else if (configuration in distribution.local) {
-        e = Error("Cannot remove core service!");
-    } else if (configuration in serviceMappings) {
-        s = serviceMappings[configuration];
-        delete serviceMappings[configuration];
-    } else {
-        e = Error("Service not found.");
-    }
-    callback(e, s);
+  if (services[configuration]) {
+    const service = services[configuration];
+    delete services[configuration];
+    return callback(null, service);
+  } else {
+    return callback(new Error(`unknown service: ${configuration}`));
+  }
 }
 
 module.exports = {get, put, rem};
