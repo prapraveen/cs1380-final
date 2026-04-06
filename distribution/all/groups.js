@@ -25,9 +25,9 @@ function groups(config) {
    * @param {Callback} callback
    */
   function put(config, group, callback) {
-      distribution[context.gid].comm.send([config, group], {service: "groups", method: "put"}, (e, v) => {
-          return callback(e, v);
-      })
+    const remote = {service: 'groups', method: 'put'};
+    const msg = [config, group];
+    globalThis.distribution[context.gid].comm.send(msg, remote, callback);
   }
 
   /**
@@ -35,9 +35,9 @@ function groups(config) {
    * @param {Callback} callback
    */
   function del(name, callback) {
-      distribution[context.gid].comm.send([name], {service: "groups", method: "del"}, (e, v) => {
-          return callback(e, v);
-      })
+    const remote = {service: 'groups', method: 'del'};
+    const msg = [name];
+    globalThis.distribution[context.gid].comm.send(msg, remote, callback);
   }
 
   /**
@@ -45,9 +45,9 @@ function groups(config) {
    * @param {Callback} callback
    */
   function get(name, callback) {
-      distribution[context.gid].comm.send([name], {service: "groups", method: "get"}, (e, v) => {
-          return callback(e, v);
-      })
+    const remote = {service: 'groups', method: 'get'};
+    const msg = [name];
+    globalThis.distribution[context.gid].comm.send(msg, remote, callback);
   }
 
   /**
@@ -56,10 +56,9 @@ function groups(config) {
    * @param {Callback} callback
    */
   function add(name, node, callback) {
-      distribution[context.gid].comm.send([name, node], {service: "groups", method: "add"}, (e, v) => {
-          return callback(e, v);
-      })
-      
+    const remote = {service: 'groups', method: 'add'};
+    const msg = [name, node];
+    globalThis.distribution[context.gid].comm.send(msg, remote, callback);
   }
 
   /**
@@ -68,9 +67,9 @@ function groups(config) {
    * @param {Callback} callback
    */
   function rem(name, node, callback) {
-      distribution[context.gid].comm.send([name, node], {service: "groups", method: "rem"}, (e, v) => {
-          return callback(e, v);
-      })
+    const remote = {service: 'groups', method: 'rem'};
+    const msg = [name, node];
+    globalThis.distribution[context.gid].comm.send(msg, remote, callback);
   }
 
   return {

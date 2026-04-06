@@ -1,65 +1,82 @@
-/**
- * @typedef {import("../types").Callback} Callback
- * @typedef {string} ServiceName
- */
-
 const services = {};
 
-/**
- * @param {ServiceName | {service: ServiceName, gid?: string}} configuration
- * @param {Callback} callback
- * @returns {void}
- */
 function get(configuration, callback) {
-  if (typeof configuration === 'string') {
-    if (services[configuration]) {
-      return callback(null, services[configuration]);
-    } else {
-      return callback(new Error(`unknown service: ${configuration}`));
-    }
+  if (!configuration) {
+    return callback(new Error('Service configuration required'));
   }
 
-  const {service, gid} = configuration;
+  let service;
+  let gid = 'local';
 
-  if (!gid || gid === 'local') {
+  if (typeof configuration === 'string') {
+    service = configuration;
+  } 
+  
+  else if (typeof configuration === 'object' && configuration.service) {
+    service = configuration.service;
+    gid = configuration.gid || 'local';
+  } 
+  
+  else {
+    return callback(new Error('Invalid service configuration'));
+  }
+  
+  // local services check first explicitly on local routes
+  if (gid === 'local') {
     if (services[service]) {
       return callback(null, services[service]);
-    } else {
-      return callback(new Error(`unknown service: ${service}`));
     }
+
+    // check globalThis.toLocal for RPC callbacks registered by wire.createRPC
+    if (globalThis.toLocal && globalThis.toLocal.has(service)) {
+      return callback(null, {call: globalThis.toLocal.get(service)});
+    }
+
+    return callback(new Error(`Service '${service}' not found`));
   }
 
-  const reqService = globalThis.distribution?.[gid]?.[service];
-  if (reqService) {
-    return callback(null, reqService);
-  } else {
-    return callback(new Error(`unknown service: ${service} in gid: ${gid}`));
+  // distributed services check explicitly on distribution for specified gid
+  // check if globalThis.distribution exists
+  if (!globalThis.distribution) {
+    return callback(new Error('Distribution not initialized'));
   }
-}
 
-/**
- * @param {object} service
- * @param {string} configuration
- * @param {Callback} callback
- * @returns {void}
- */
-function put(service, configuration, callback) {
-  services[configuration] = service;
-  return callback(null, service);
-}
-
-/**
- * @param {string} configuration
- * @param {Callback} callback
- */
-function rem(configuration, callback) {
-  if (services[configuration]) {
-    const service = services[configuration];
-    delete services[configuration];
-    return callback(null, service);
-  } else {
-    return callback(new Error(`unknown service: ${configuration}`));
+   
+  const group = globalThis.distribution[gid]; // group exists on distribution
+  if (!group) {
+    return callback(new Error(`Group '${gid}' not found`));
   }
+
+  
+  const serviceObj = group[service]; // service exists on that group
+  if (!serviceObj) {
+    return callback(new Error(`Service '${service}' not found in group '${gid}'`));
+  }
+
+  return callback(null, serviceObj); // if service found, return it
 }
 
-module.exports = {get, put, rem};
+function put(serviceObj, serviceName, callback) {
+  if (!serviceObj) {
+    return callback(new Error('Service object required'));
+  }
+
+  if (!serviceName || typeof serviceName !== 'string') {
+    return callback(new Error('Service name must be string'));
+  }
+
+  services[serviceName] = serviceObj;
+  return callback(null, serviceName);
+}
+
+function rem(serviceName, callback) {
+  if (!services[serviceName]) {
+    return callback(new Error(`Service '${serviceName}' not found`));
+  }
+
+  const removed = services[serviceName];
+  delete services[serviceName];
+  return callback(null, removed);
+}
+
+module.exports = { get, put, rem };

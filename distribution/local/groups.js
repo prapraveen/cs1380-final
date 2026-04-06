@@ -1,5 +1,3 @@
-const distribution = globalThis.distribution;
-const id = distribution.util.id;
 // @ts-check
 /**
  * @typedef {import("../types.js").Callback} Callback
@@ -7,31 +5,44 @@ const id = distribution.util.id;
  * @typedef {import("../types.js").Node} Node
  */
 
-const groups_map = {};
+const id = require('../util/id.js');
+// define group mapping storage
+// format: {gid -> {sid -> node}}
+const groups = {};
+
+// initialize default groups for local node and all nodes
+const initialGroups = () => {
+  const localNode = globalThis.distribution.node.config;
+  const localSid = id.getSID(localNode);
+
+  if (!groups['all']) { // initialize all groups
+    groups['all'] = {[localSid]: localNode}; 
+  }
+
+  if (!groups['local']) { // initialize local group with local node, sid
+    groups['local'] = {[localSid]: localNode};
+  }
+};
+
+// call init on module load
+initialGroups();
 
 /**
  * @param {string} name
  * @param {Callback} callback
  */
 function get(name, callback) {
-  if (!callback) {
-    callback = () => {};
+  if (!name || typeof name !== 'string') { // validate group name type
+    return callback(new Error('group name is not a string'));
   }
 
-  if (name == "all") {
-    const all_nodes = {}
-    for (const [_, value] of Object.entries(groups_map)) {
-      for (const [sid, node] of Object.entries(value)) {
-        all_nodes[sid] = node;
-      }
-    }
-    all_nodes[id.getSID(distribution.node.config)] = distribution.node.config;
-    return callback(null, all_nodes);
+  // check if group exists
+  if (groups[name]) {
+    return callback(null, groups[name]);
   }
-  if (name in groups_map) {
-    return callback(null, groups_map[name]);
-  } else {
-    return callback (new Error("Get: Group not found."), null);
+  
+  else { // handle case when group does not exist
+    return callback(new Error(`group '${name}' not found`));
   }
 }
 
@@ -41,36 +52,60 @@ function get(name, callback) {
  * @param {Callback} callback
  */
 function put(config, group, callback) {
-  if (!callback) {
-    callback = () => {};
+  let gid;
+  if (typeof config === 'string') { // extract gid from config
+    gid = config; // simple string name
+  }
+  
+  else if (typeof config === 'object' && config.gid) {
+    gid = config.gid; // object with gid property
+  }
+  
+  else { // handle case when config is invalid and gid cannot be extracted
+    return callback(new Error('no gid, invalid config'));
   }
 
-  if (typeof(config) == 'string') {
-    config = {gid: config};
+  if (!group || typeof group !== 'object') { // validate group object
+    return callback(new Error('group must be object'));
   }
-  groups_map[config.gid] = group;
-  distribution[config.gid] = {};
-  const {setup} = require('../all/all.js');
-  distribution[config.gid] = setup(config);
-  return callback(null, group);
+
+  // store group, replacing any possible existing group with same gid
+  groups[gid] = group;
+
+  // dynamically create distribution[gid] object
+  if (!globalThis.distribution[gid]) {
+    // normalize config so it's always object with gid
+    const serviceConfig = typeof config === 'object' ? config : {gid: config};
+
+    // use the setup function from all.js to create services for this group
+    const {setup} = require('../all/all.js');
+    globalThis.distribution[gid] = setup(serviceConfig);
+  }
+
+  return callback(null, group); // return group not gid
 }
 
 /**
  * @param {string} name
  * @param {Callback} callback
  */
+
 function del(name, callback) {
-  if (!callback) {
-    callback = () => {};
+  if (!name || typeof name !== 'string') { // validate group name type
+    return callback(new Error('group name must be string'));
   }
 
-  if (!(name in groups_map)) {
-    return callback(new Error("Del: Group not found."), null);
+  if (groups[name]) { // remove group if it exists
+    const deletedGroup = groups[name];
+    delete groups[name];
+    delete globalThis.distribution[name];
+    // clean up distribution object
+    return callback(null, deletedGroup); // return deleted group
   }
-  const ret = groups_map[name];
-  delete groups_map[name];
-  delete distribution[name];
-  return callback(null, ret);
+
+  else {
+    return callback(new Error(`group '${name}' not found`));
+  }
 }
 
 /**
@@ -79,34 +114,56 @@ function del(name, callback) {
  * @param {Callback} callback
  */
 function add(name, node, callback) {
-  if (!callback) {
-    callback = () => {};
+  // handle group name and node validations
+  if (!name || typeof name !== 'string') {
+    return callback(new Error('group name must be string'));
   }
 
-  if (!(name in groups_map)) {
-    return callback(new Error("Add: Group not found."), null);
+  if (!node || !node.ip || !node.port) {
+    return callback(new Error('node must have ip and port'));
   }
-  groups_map[name][id.getSID(node)] = node;
-  return callback(null, groups_map[name]);
+
+  if (!groups[name]) {
+    return callback(new Error(`group '${name}' not found`)); // error not noop
+  }
+
+  // success case to add node to group
+  const sid = id.getSID(node);
+  groups[name][sid] = node;
+
+  // return updated group
+  if (callback) {
+    return callback(null, groups[name]);
+  }
+  return groups[name];
 };
 
 /**
  * @param {string} name
- * @param {string} node
+ * @param {string} nodeId
  * @param {Callback} callback
  */
-function rem(name, node, callback) {
-  if (!(name in groups_map)) {
-    return callback(new Error("Rem: Group not found."), null);
+function rem(name, nodeId, callback) {
+  // handle group name and node validations
+  if (!name || typeof name !== 'string') {
+    return callback(new Error('group name must be string'));
   }
 
-  if (!(node in groups_map[name])) {
-    return callback(new Error("Node not found."), null);
+  if (!nodeId || typeof nodeId !== 'string') {
+    return callback(new Error('node id must be string'));
   }
 
-  const ret = groups_map[name][node];
-  delete groups_map[name][node];
-  return callback(null, ret);
+  if (!groups[name]) {
+    return callback(new Error(`group '${name}' not found`)); // error not noop
+  }
+
+  // remove case: remove node from group
+  if (groups[name][nodeId]) {
+    delete groups[name][nodeId];
+  }
+
+  // return updated group
+  return callback(null, groups[name]);
 };
 
 module.exports = {get, put, del, add, rem};

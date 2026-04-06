@@ -1,5 +1,3 @@
-const distribution = globalThis.distribution;
-const id = distribution.util.id;
 // @ts-check
 /**
  * @typedef {import("../types.js").Callback} Callback
@@ -17,6 +15,7 @@ const id = distribution.util.id;
  * @property {(message: any[], configuration: Target, callback: Callback) => void} send
  */
 
+const id = require('../util/id.js');
 /**
  * @param {Config} config
  * @returns {Comm}
@@ -31,49 +30,58 @@ function comm(config) {
    * @param {Callback} callback
    */
   function send(message, configuration, callback) {
-    const nodes = distribution.local.groups.get(context.gid, (e, v) => {
-      if (e) {
-        return callback(e, null);
-      } else if (Object.entries(v).length == 0) {
-        return callback(new Error("Cannot send on empty group."), null);
-      }
-      const entries = Object.entries(v);
-      const total_count = entries.length;
-      const errors = {};
-      const values = {};
-      let counter = 0;
-      entries.forEach(entry => {
-        const [sid, node] = entry;
-        configuration["node"] = node;
-        distribution.local.comm.send(message, configuration, (e, v) => {
-          if (e) {
-            errors[sid] = e;
-          } else {
-            values[sid] = v;
-          }
-          counter += 1;
-          if (counter == total_count) {
-            callback(errors, values);
-          }
-        })
-      // function sendStep(i, errors, values) {
-      //   if (i >= total_count) {
-      //     return callback(errors, values);
-      //   }
-      //   const [sid, node] = entries[i];
-      //   configuration["node"] = node;
-      //   distribution.local.comm.send(message, configuration, (e, v) => {
-      //     if (e) {
-      //       errors[sid] = e;
-      //     } else {
-      //       values[sid] = v;
-      //     }
-      //     sendStep(i + 1, errors, values);
-      //   })
-      // }
-      // sendStep(0, {}, {});
-      })
+    // overall send message from a node to all nodes in a group 
+    // that provide the specified service and method
 
+    // get nodes in group
+    globalThis.distribution.local.groups.get(context.gid, (err, nodes) => {
+      if (err) {
+        return callback(err);
+      }
+      
+      // get node ids, sids, of nodes in group
+      const sids = Object.keys(nodes);
+      
+      // map sid -> error, sid -> value
+      const errors = {}; 
+      const values = {};
+      let left = sids.length; // number of nodes left to respond
+
+      // return error if group is empty
+      if (left === 0) {
+        return callback(new Error('group is empty'), null);
+      }
+
+      // send message to each node iteratively and collect responses
+      sids.forEach((sid) => {
+        const node = nodes[sid];
+        const remote = {
+          node: node,
+          service: configuration.service,
+          method: configuration.method,
+          gid: 'local', 
+          // Always use 'local' - we're calling local services on remote nodes
+        };
+
+        globalThis.distribution.local.comm.send(message, remote, (e, v) => {
+          if (e) {
+            errors[sid] = e; // collect error
+          } 
+          
+          else {
+            values[sid] = v; // collect value
+          }
+
+          left-=1;
+
+          // call callback when all responses collected
+          if (left === 0) {
+            // return errors map if any errors, otherwise empty object
+            const errorMappings = Object.keys(errors).length > 0 ? errors : {};
+            callback(errorMappings, values);
+          }
+        });
+      });
     });
   }
 

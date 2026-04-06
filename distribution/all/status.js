@@ -1,5 +1,3 @@
-const distribution = globalThis.distribution;
-const id = distribution.util.id;
 // @ts-check
 /**
  * @typedef {import("../types.js").Callback} Callback
@@ -25,76 +23,49 @@ function status(config) {
    * @param {Callback} callback
    */
   function get(configuration, callback) {
-    if (configuration != "heapTotal" && configuration != "heapUsed") {
-      distribution[context.gid].comm.send([configuration], {service: "status", method: "get"}, callback);
-      return;
+  const remote = { service: 'status', method: 'get' };
+  const msg = [configuration];
+
+  globalThis.distribution[context.gid].comm.send(msg, remote, (errors, values) => {
+    if (errors && Object.keys(errors).length > 0) {
+      return callback(errors, values);
     }
-    distribution[context.gid].comm.send([configuration], {service: "status", method: "get"}, (e, v) => { 
-      if (!v) {
-        return callback(new Error(e), null);
-      }
+
+
+    if (configuration === 'heapTotal') { // heapTotal to sum
       let total = 0;
-      for (const [key, val] of Object.entries(v)) {
-        total += val;
+      for (const sid in values) {
+        total += values[sid];
       }
-      return callback(null, total);
-    })
-  }
+
+      return callback(errors, total);
+    }
+
+    // heapUsed object keyed by sid
+    if (configuration === 'heapUsed') {
+      return callback(errors, values);
+    }
+
+    // everything else as array
+    return callback(errors, Object.values(values));
+  });
+}
+
+
 
   /**
    * @param {Node} configuration
    * @param {Callback} callback
    */
   function spawn(configuration, callback) {
-    distribution.local.status.spawn(configuration, (e, v) => {
-      if (e) {
-        return callback(e, v);
-      }
-      const message = [context.gid, configuration];
-      distribution[context.gid].comm.send(message, {service: "groups", method: "add"}, (e, v) => {
-        return callback(e, v)
-      })
-    });
-
+    callback(new Error('status.spawn not implemented')); // If you won't implement this, check the skip.sh script.
   }
 
   /**
    * @param {Callback} callback
    */
   function stop(callback) {
-    const configuration = {service: "status", method: "stop"};
-    const nodes = distribution.local.groups.get(context.gid, (e, v) => {
-      if (e) {
-        return callback(e, null);
-      }
-      const entries = Object.entries(v);
-      const total_count = entries.length;
-      function sendStep(i, errors, values) {
-        if (i >= total_count) {
-          if (Object.entries(errors).length == 0) {
-            errors = null;
-          }
-          if (Object.entries(values).length == 0) {
-            values = null;
-          }
-          return callback(errors, values);
-        }
-        const [sid, node] = entries[i];
-        if (sid == id.getSID(distribution.node.config)) {
-          return sendStep(i + 1, errors, values);
-        }
-        configuration["node"] = node;
-        distribution.local.comm.send([], configuration, (e, v) => {
-          if (e) {
-            errors[sid] = e;
-          } else {
-            values[sid] = v;
-          }
-          sendStep(i + 1, errors, values);
-        })
-      }
-      sendStep(0, {}, {});
-    })
+    callback(new Error('status.stop not implemented')); // If you won't implement this, check the skip.sh script.
   }
 
   return {get, stop, spawn};

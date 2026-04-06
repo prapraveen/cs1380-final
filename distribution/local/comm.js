@@ -21,8 +21,8 @@ const http = require('node:http');
  * @returns {void}
  */
 function send(message, remote, callback) {
-  const gid = remote.gid || 'local';
-  const path = `/${gid}/${remote.service}/${remote.method}`;
+  const gid = remote.gid || 'local'; // default gid, can be overridden by remote config
+  const path = `/${gid}/${remote.service}/${remote.method}`; // build path
 
   const options = {
     hostname: remote.node.ip,
