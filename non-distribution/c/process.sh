@@ -11,9 +11,7 @@
 # Tip: Make sure your program doesn't emit a non-zero exit code if there are no words left after removing stopwords.
 # You can combine the grep invocation with `|| true` to achieve this. Be careful though, as this will also hide other errors!
 
-T_FOLDER=${T_FOLDER:-t}
-R_FOLDER=${R_FOLDER:-}
-
-cd "$(dirname "$0")/..$R_FOLDER" || exit 1
-
-tr '[:upper:]' '[:lower:]' | tr -cs '[:lower:]' '\n' | grep -vFxf "$T_FOLDER"/../d/stopwords.txt || true
+iconv -c -t ASCII//TRANSLIT | \
+tr -cs A-Za-z '\n' | \
+tr '[:upper:]' '[:lower:]' | \
+grep -vwf ./d/stopwords.txt || true

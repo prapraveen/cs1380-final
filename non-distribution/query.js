@@ -31,38 +31,27 @@ const {execSync} = require('child_process');
 
 
 function query(indexFile, args) {
-  let term;
-  if (args.length == 1) {
-    term = args[0];
-  } else if (args.length == 2) {
-    term = args[0] + ' ' + args[1];
-  } else {
-    term = args[0] + ' ' + args[1] + ' ' + args[2];
-  }
+  const query = args.join(' ');
+  const processedQuery = execSync(`echo "${query}" | ./c/process.sh | ./c/stem.js`, {encoding: 'utf-8'}).trim();
+  const terms = processedQuery.split(/\s+/).filter((term) => term.length > 0);
 
-  const cleanedQuery = execSync(`echo "${term}" | ./c/process.sh | ./c/stem.js`, {encoding: 'utf-8'}).toString().trim();
-  if (cleanedQuery.trim() == '') {
-    return;
-  }
-  fs.readFile(indexFile, 'utf8', (err, data) =>
-    printResults(err, data, cleanedQuery),
-  );
-}
+  if (terms.length === 0) return;
 
-const printResults = (err, data, cleanedQuery) => {
-  if (err) {
-    console.error('Error reading file:', err);
-    return;
-  }
+  const indexData = fs.readFileSync(indexFile, 'utf-8');
+  const indexLines = indexData.split('\n');
 
-  const globalIndexLines = data.split('\n');
-  for (const line of globalIndexLines) {
-    const [term] = line.split('|').map((s) => s.trim());
-    if (term.includes(cleanedQuery)) {
-      console.log(line);
+  const results = [];
+  for (const line of indexLines) {
+    const [term] = line.split('|').map((part) => part.trim());
+    if (term.includes(processedQuery)) {
+      results.push(line);
     }
   }
-};
+
+  for (const result of results) {
+    console.log(result);
+  }
+}
 
 const args = process.argv.slice(2); // Get command-line arguments
 if (args.length < 1) {

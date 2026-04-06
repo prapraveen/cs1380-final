@@ -1,25 +1,23 @@
 #!/bin/bash
 # This is a student test
+GLOBAL_FILE=$(mktemp)
+echo -e "stuff | url1 2\ncheck stuff | url2 1\nother | url3 3" > "$GLOBAL_FILE"
 
-T_FOLDER=${T_FOLDER:-t}
-R_FOLDER=${R_FOLDER:-}
+mv "$GLOBAL_FILE" d/global-index.txt
 
-cd "$(dirname "$0")/..$R_FOLDER" || exit 1
+QUERY="stuff"
 
-DIFF=${DIFF:-diff}
+EXPECTED="stuff | url1 2
+check stuff | url2 1"
 
-term="abcd"
+OUTPUT=$(./query.js "$QUERY")
+rm d/global-index.txt
 
-cd ../
-
-echo $"PWD"
-cat t/ts/m5.txt > d/global-index.txt
-
-if $DIFF <(./query.js "$term") <(cat t/ts/m6.txt) >&2;
-then
-    echo "$0 success: search results are identical"
-    exit 0
+if [ "$OUTPUT" == "$EXPECTED" ]; then
+	echo "test passed."
+	exit 0
 else
-    echo "$0 failure: search results are not identical"
-    exit 1
+	echo "got: $OUTPUT"
+	echo "expected: $EXPECTED"
+	exit 1
 fi

@@ -1,7 +1,0 @@
-A B C | 1 | example.com
-A B | 2 | example.com
-A C | 1 | example.com
-A | 3 | example.com
-B C | 2 | example.com
-B | 2 | example.com
-C | 1 | example.com

@@ -1,3 +1,0 @@
-abcd | example.com/1 5
-abcd b | example.com/8 2 example.com/7 1 
-abcd b c | example.com/9 3

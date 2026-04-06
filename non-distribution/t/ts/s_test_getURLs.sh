@@ -1,21 +1,18 @@
 #!/bin/bash
 # This is a student test
+BASE_URL="http://example.com/dir/"
+HTML='<html><body><a href="hi.html">hi</a><a href="/brown.html">brown2</a><a href="https://brown.edu/cs">browncs</a></body></html>'
+EXPECTED="http://example.com/brown.html
+http://example.com/dir/hi.html
+https://brown.edu/cs"
 
-T_FOLDER=${T_FOLDER:-t}
-R_FOLDER=${R_FOLDER:-}
+OUTPUT=$(echo "$HTML" | ../c/getURLs.js "$BASE_URL" | sort)
 
-cd "$(dirname "$0")/..$R_FOLDER" || exit 1
-
-DIFF=${DIFF:-diff}
-
-url="https://cs.brown.edu/courses/csci1380/sandbox/2"
-
-
-if ! $DIFF <(cat ts/d0.txt | ../c/getURLs.js $url | sort) <(sort ts/d1.txt) >&2;
-then
-    echo "$0 failure: URL sets are not identical"
+if [ "$(echo "$OUTPUT" | tr -d '\n')" == "$(echo "$EXPECTED" | tr -d '\n')" ]; then
+    echo "test passed."
+    exit 0
+else
+    echo "got: $OUTPUT"
+    echo "expected: $EXPECTED"
     exit 1
 fi
-
-echo "$0 success: URL sets are identical"
-exit 0

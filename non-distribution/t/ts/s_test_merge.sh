@@ -1,29 +1,25 @@
 #!/bin/bash
 # This is a student test
 
-T_FOLDER=${T_FOLDER:-t}
-R_FOLDER=${R_FOLDER:-}
+GLOBAL_FILE=$(mktemp)
+echo -e "word1 | url1 1\nword2 | url2 2" > "$GLOBAL_FILE"
 
-cd "$(dirname "$0")/..$R_FOLDER" || exit 1
+LOCAL_INPUT="word1 | 3 | url1
+word1 | 4 | url3
+word2 | 5 | url2
+word2 | 6 | url4"
 
-DIFF=${DIFF:-diff}
-DIFF_PERCENT=${DIFF_PERCENT:-0}
+EXPECTED="word1 | url1 4 url3 4
+word2 | url2 7 url4 6"
 
-cat /dev/null > ts/global-index.txt
+OUTPUT=$(echo -e "$LOCAL_INPUT" | ../c/merge.js "$GLOBAL_FILE")
+rm "$GLOBAL_FILE"
 
-files=(ts/m{1..3}.txt)
-
-for file in "${files[@]}"
-do
-    cat "$file" | ../c/merge.js ts/global-index.txt > ts/temp-global-index.txt
-    mv ts/temp-global-index.txt ts/global-index.txt
-done
-
-if DIFF_PERCENT=$DIFF_PERCENT ./gi-diff.js <(sort ts/global-index.txt) <(sort ts/m4.txt) >&2;
-then
-    echo "$0 success: global indexes are identical"
-    exit 0
+if [ "$OUTPUT" == "$EXPECTED" ]; then
+	echo "test passed."
+	exit 0
 else
-    echo "$0 failure: global indexes are not identical"
-    exit 1
+	echo "got: $OUTPUT"
+	echo "expected: $EXPECTED"
+	exit 1
 fi

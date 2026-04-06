@@ -1,10 +1,10 @@
 {
-  "name": "cs1380:m0",
+  "name": "cs1380-m0",
   "version": "1.0.0",
   "author": {
-    "name": "<Praveen Prabaharan>",
-    "email": "<praveen_prabaharan@brown.edu?>",
-    "cslogin": "<pprabaha>"
+    "name": "Eric Wu",
+    "email": "eric_wu@brown.edu",
+    "cslogin": "ewu69"
   },
   "description": "A set of components for cs1380's search engine.",
   "dependencies": {
@@ -23,25 +23,33 @@
     "jest": "^29.7.0"
   },
   "ec2": {
-    "ip": "18.212.87.107",
+    "ip": "54.242.164.249",
     "port": 8080
   },
   "report": [
     {
       "milestone": "M0",
-      "hours": 10,
-      "loc": 2950,
+      "hours": 4,
+      "loc": 233,
       "dev": {
-        "cpu-no": 3,
-        "mem-gb": 16,
-        "ssd-gb": 512
+        "cpu-no": 11,
+        "mem-gb": 18,
+        "ssd-gb": 1000
       },
       "throughput": {
-        "dev": [0.385],
-        "aws": [0.126],
+        "dev": [
+          418.117,
+          221.956,
+          199.165
+        ],
+        "aws": [
+          804.419,
+          577.59,
+          477.34
+        ],
         "gs": []
       },
-      "dloc": 240
+      "dloc": 2000
     }
   ]
 }
