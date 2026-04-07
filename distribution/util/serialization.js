@@ -1,151 +1,96 @@
 // @ts-check
 
-const to_json = (object) => {
-    const num_to_json = (n) => {
-        return {"type":"number","value":n.toString()};
-    }
-
-    const string_to_json = (s) => {
-        return {"type":"string","value":s};
-    }
-
-    const boolean_to_json = (b) => {
-        return {"type":"boolean","value":b.toString()};
-    }
-
-    const null_to_json = () => {
-        return {"type":"null","value":""};
-    }
-    
-    const undefined_to_json = () => {
-        return {"type":"undefined","value":""};
-    }
-
-    const function_to_json = (f) =>  {
-        return {"type":"function","value":f.toString()};
-    }
-
-    const array_to_json = (a) => {
-        const res = {};
-        for (let i = 0; i < a.length; i++) {
-            res[i] = to_json(a[i]);
-        }
-        return {"type":"array","value":res};
-    }
-
-    const date_to_json = (d) => {
-        return {"type":"date","value":d.toJSON()};
-    }
-
-    const error_to_json = (e) => {
-        return {
-            "type": "error",
-            "value": {
-                "type": "object",
-                "value": {
-                    "name": to_json(e.name),
-                    "message": to_json(e.message),
-                    "cause": to_json(e.cause)
-                }
-            }
-        }
-    }
-
-    const object_to_json = (obj) => {
-        const res = {};
-        for (const [key, val] of Object.entries(obj)) {
-            res[key] = to_json(val);
-        }
-        return {"type": "object", "value": res};
-    }
-
-    const bigint_to_json = (b) => {
-        return {"type":"bigint","value":b.toString()};
-    }
-
-    switch (typeof(object)) {
-        case "number":
-            return num_to_json(object);
-        case "bigint":
-            return bigint_to_json(object);
-        case "string":
-            return string_to_json(object);
-        case "boolean":
-            return boolean_to_json(object);
-        case "undefined":
-            return undefined_to_json();
-        case "function":
-            return function_to_json(object);
-        case "object":
-            if (object === null) {
-                return null_to_json();
-            }
-            if (object instanceof Array) {
-                return array_to_json(object);
-            }
-            if (object instanceof Date) {
-                return date_to_json(object);
-            }
-            if (object instanceof Error) {
-                return error_to_json(object);
-            }
-            return object_to_json(object);
-        default:
-            throw new TypeError("Type is not supported by serialize function!");
-    }
-}
-
 /**
  * @param {any} object
  * @returns {string}
  */
 function serialize(object) {
-    return JSON.stringify(to_json(object));
-}
+    if (typeof object === 'number') {
+        return JSON.stringify({
+            type: 'number',
+            value: String(object),
+        });
+    }
 
-const json_to_value = (obj) => {
-    const json_to_array = (a) => {
-        const res = [];
-        for (const [_, val] of Object.entries(a)) {
-            res.push(json_to_value(val));
+    if (typeof object === 'bigint') {
+        return JSON.stringify({
+            type: 'bigint',
+            value: String(object),
+        });
+    }
+
+    if (typeof object === 'string') {
+        return JSON.stringify({
+            type: 'string',
+            value: String(object),
+        });
+    }
+
+    if (typeof object === 'boolean') {
+        return JSON.stringify({
+            type: 'boolean',
+            value: String(object),
+        });
+    }
+
+    if (object === null) {
+        return JSON.stringify({
+            type: 'null',
+            value: String(object),
+        });
+    }
+
+    if (typeof object === 'undefined') {
+        return JSON.stringify({
+            type: 'undefined',
+            value: String(object),
+        });
+    }
+
+    if (typeof object === 'function') {
+        return JSON.stringify({
+            type: 'function',
+            value: object.toString(),
+        });
+    }
+
+    if (Array.isArray(object)) {
+        return JSON.stringify({
+            type: 'array',
+            value: object.map((item) => JSON.parse(serialize(item))),
+        });
+    }
+
+    if (object instanceof Date) {
+        return JSON.stringify({
+            type: 'date',
+            value: object.getTime().toString(),
+        });
+    }
+
+    if (object instanceof Error) {
+        return JSON.stringify({
+            type: 'error',
+            value: {
+                message: object.message,
+                name: object.name,
+                stack: object.stack,
+            },
+        });
+    }
+  
+    if (typeof object === 'object') {
+        const serializedObj = {};
+        for (const key of Object.keys(object)) {
+            serializedObj[key] = JSON.parse(serialize(object[key]));
         }
-        return res;
+        return JSON.stringify({
+            type: 'object',
+            value: serializedObj,
+        });
     }
 
-    const json_to_object = (obj) => {
-        const res = {};
-        for (const [key, val] of Object.entries(obj)) {
-            res[key] = json_to_value(val);
-        }
-        return res;
-    }
-
-    switch (obj.type) {
-        case "number":
-            return Number(obj.value);
-        case "bigint":
-            return BigInt(obj.value);
-        case "string":
-            return obj.value;
-        case "boolean":
-            return obj.value == "true" ? true : false;
-        case "undefined":
-            return undefined;
-        case "null":
-            return null;
-        case "function":
-            return new Function("return " + obj.value)();
-        case "array":
-            return json_to_array(obj.value);
-        case "date":
-            return new Date(obj.value);
-        case "error":
-            return new Error(json_to_value(obj.value.value.message), {"cause": json_to_value(obj.value.value.cause)});
-        case "object":
-            return json_to_object(obj.value);
-        default:
-            throw new SyntaxError("Invalid serialized object!");
-    }
+    throw new Error(`Unsupported type: ${object.type}`);
 }
 
 /**
@@ -156,8 +101,60 @@ function deserialize(string) {
     if (typeof string !== 'string') {
         throw new Error(`Invalid argument type: ${typeof string}.`);
     }
+    const parsed = JSON.parse(string);
 
-    return json_to_value(JSON.parse(string));
+    if (parsed.type === 'number') {
+        return Number(parsed.value);
+    }
+
+    if (parsed.type === 'bigint') {
+        return BigInt(parsed.value);
+    }
+
+    if (parsed.type === 'string') {
+        return String(parsed.value);
+    }
+
+    if (parsed.type === 'boolean') {
+        return parsed.value === 'true';
+    }
+
+    if (parsed.type === 'null') {
+        return null;
+    }
+
+    if (parsed.type === 'undefined') {
+        return undefined;
+    }
+
+    if (parsed.type === 'function') {
+        return new Function(`return ${parsed.value}`)();
+    }
+
+    if (parsed.type === 'array') {
+        return parsed.value.map((item) => deserialize(JSON.stringify(item)));
+    }
+
+    if (parsed.type === 'date') {
+        return new Date(Number(parsed.value));
+    }
+
+    if (parsed.type === 'error'){
+        const err = new Error(parsed.value.message);
+        err.name = parsed.value.name;
+        err.stack = parsed.value.stack;
+        return err;
+    }
+
+    if (parsed.type === 'object'){
+        const obj = {};
+        for (const key of Object.keys(parsed.value)){
+            obj[key] = deserialize(JSON.stringify(parsed.value[key]));
+        }
+        return obj;
+    }
+
+    throw new Error(`Unsupported type: ${parsed.type}`);
 }
 
 module.exports = {
