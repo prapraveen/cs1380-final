@@ -58,8 +58,7 @@ function get(configuration, callback) {
       return callback(null, []);
     }
     const files = fs.readdirSync(`${path}/${configuration.gid}/`);
-    const keys = files.map(f => f.split(".")[0]);
-    return callback(null, keys);
+    return callback(null, files);
   }
 
   try {

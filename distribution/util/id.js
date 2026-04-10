@@ -66,7 +66,17 @@ function idToNum(id) {
 /** @type { Hasher } */
 const naiveHash = (kid, nids) => {
   const sortedNids = [...nids].sort();
-  const index = Number(idToNum(kid) % BigInt(sortedNids.length));
+
+  let id_num;
+  const trimmed = kid.startsWith('0x') ? kid.slice(2) : kid;
+  if (/^[0-9a-fA-F]+$/.test(trimmed)) {
+    id_num = BigInt(`0x${trimmed}`);
+  } else {
+    id_num = BigInt(kid);
+  }
+
+
+  const index = Number(id_num % BigInt(sortedNids.length));
   return sortedNids[index];
 };
 

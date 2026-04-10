@@ -4,6 +4,10 @@
  */
 
 const log = require('./distribution/util/log.js');
+const http = require('http');
+const https = require('https');
+const {JSDOM} = require('jsdom');
+const {URL} = require('url');
 
 /**
  * @param {Node} [config]
@@ -30,6 +34,11 @@ function bootstrap(config) {
 
   const {setup} = require('./distribution/all/all.js');
   distribution.all = setup({gid: 'all'});
+
+  distribution.http = http;
+  distribution.https = https;
+  distribution.JSDOM = JSDOM;
+  distribution.URL = URL;
 
   /* Overrides when missing functionality from previous milestone or extra credit is needed */
 
