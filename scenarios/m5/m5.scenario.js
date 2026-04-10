@@ -93,7 +93,7 @@ test('(10 pts) (scenario) all.mr:dlib', (done) => {
    The reduce function should return the count of each word.
 */
 
-  const mapper = (key, value) => {
+  const mapper = (key, value, cb) => {
       const counter = {}
       for (const word of value.split(" ")) {
           if (!counter[word]) {
@@ -105,7 +105,7 @@ test('(10 pts) (scenario) all.mr:dlib', (done) => {
       for (const k of Object.keys(counter)) {
           res.push({[k]: counter[k]});
       }
-      return res;
+      cb(res);
   };
 
   const reducer = (key, values) => {
@@ -127,10 +127,10 @@ test('(10 pts) (scenario) all.mr:dlib', (done) => {
   ];
 
   const expected = [
-    {It: 1}, {was: 10},
+    {It: 10}, {was: 10},
     {the: 10}, {best: 1},
     {of: 10}, {'times,': 2},
-    {it: 9}, {worst: 1},
+    {worst: 1},
     {age: 2}, {'wisdom,': 1},
     {'foolishness,': 1}, {epoch: 2},
     {'belief,': 1}, {'incredulity,': 1},

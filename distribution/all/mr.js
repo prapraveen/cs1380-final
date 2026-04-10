@@ -80,43 +80,46 @@ function mr(config) {
         // console.log("entered map");
         distribution.local.store.get({gid: mrGid, key: null}, (e, v) => {
           if (e) return callback(e, v);
-          console.log("all keys: ", v);
+          // console.log("all keys: ", v);
           let all_res = [];
-          const mapStep = (idx) => {
-            if (idx == v.length) {
-              return callback(null, all_res);
-            }
-
-            const key = v[idx];
+          let mapStepCounter = 0;
+          const totalSteps = v.length;
+          v.forEach((key) => {
             distribution.local.store.get({gid: mrGid, key: key}, (e, value) => {
               // console.log(mrGid, ": ", value);
               // if (e) console.log(e);
               distribution.local.routes.get(mrID, (e, f) => {
-                let map_res = f.mapper(key, value);
+                let map_res = f.mapper(key, value, (v) => {
+                  if (v instanceof Array) {
+                    for (const elt of v) {
+                      all_res.push(elt)
+                    }
+                  } else {
+                    all_res.push(v);
+                  }
+
+                  mapStepCounter++;
+                  if (mapStepCounter == totalSteps) {
+                    let storeStepCounter = 0;
+                    const totalStoreSteps = all_res.length;
+                    all_res.forEach((kv) => {
+                      const k = Object.keys(kv)[0];
+                      const v = Object.values(kv)[0];
+                      distribution.local.store.append(v, {gid: `${mrID}_map`, key: k}, (e, v) => {
+                        storeStepCounter++;
+                        if (storeStepCounter == totalStoreSteps) {
+                          return callback(null, all_res);
+                        }
+                      });
+                    })
+                  }
+                });
 
                 // console.log(mrGid, ": ", map_res);
-                if (!(map_res instanceof Array)) {
-                  map_res = [map_res];
-                }
-                all_res = [...all_res, ...map_res];
 
-                const storeStep = (idx2) => {
-                  if (idx2 == map_res.length) {
-                    return mapStep(idx + 1)
-                  }
-                  const kv = map_res[idx2];
-                  const k = Object.keys(kv)[0];
-                  const v = Object.values(kv)[0];
-                  distribution.local.store.append(v, {gid: `${mrID}_map`, key: k}, (e, v) => {
-                    storeStep(idx2 + 1);
-                  });
-                }
-                storeStep(0);
               })
             })
-            
-          }
-          mapStep(0);
+          })
         })
       },
       shuffle: function(
