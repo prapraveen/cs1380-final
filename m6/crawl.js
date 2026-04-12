@@ -19,7 +19,7 @@ groupA[id.getSID(n2)] = n2;
 groupA[id.getSID(n3)] = n3;
 
 // let seed_urls = ["apartments.com", "craigslist.org", "zillow.com", "airbnb.com"];
-let seed_urls = ["https://wikipedia.org"];
+let seed_urls = ["https://en.wikipedia.org/wiki/distributed_computing"];
 let seed_url_keys = seed_urls.map(encodeURIComponent);
 
 
@@ -52,8 +52,8 @@ distribution.local.groups.put({gid: "urls_queue", hash: id.naiveHash}, groupA, (
               } else {
                 const curlHTML = (url, redirectCounter, cb) => {
                   console.log("CRAWLING:", url);
-                  if (!url.endsWith('/')) {
-                    url += '/';
+                  if (url.endsWith('/') && url.length > 0) {
+                    url = url.slice(0, -1);
                   }
 
                   if (redirectCounter <= 0) {
@@ -92,6 +92,7 @@ distribution.local.groups.put({gid: "urls_queue", hash: id.naiveHash}, groupA, (
 
                     if (res.statusCode != 200) {
                       console.log(url, "invalid status code:", res.statusCode);
+                      console.log(options);
                       return cb("");
                     }
 

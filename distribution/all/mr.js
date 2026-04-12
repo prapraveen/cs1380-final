@@ -87,50 +87,53 @@ function mr(config) {
           if (totalSteps == 0) {
             return callback(null, []);
           }
-          v.forEach((key) => {
-            // console.log("KEY: ", key);
-            distribution.local.store.get({gid: mrGid, key: key}, (e, value) => {
-              // console.log(mrGid, ": ", value);
-              if (value === null) {
-                return callback(null, []);
-              }
-              // if (e) console.log(e);
-              distribution.local.routes.get(mrID, (e, f) => {
-                let map_res = f.mapper(key, value, (v) => {
-                  if (v instanceof Array) {
-                    for (const elt of v) {
-                      all_res.push(elt)
+          v.forEach((key, index) => {
+            setTimeout(() => {
+              // console.log("KEY: ", key);
+              distribution.local.store.get({gid: mrGid, key: key}, (e, value) => {
+                // console.log(mrGid, ": ", value);
+                if (value === null) {
+                  return callback(null, []);
+                }
+                // if (e) console.log(e);
+                distribution.local.routes.get(mrID, (e, f) => {
+                  let map_res = f.mapper(key, value, (v) => {
+                    if (v instanceof Array) {
+                      for (const elt of v) {
+                        all_res.push(elt)
+                      }
+                    } else {
+                      all_res.push(v);
                     }
-                  } else {
-                    all_res.push(v);
-                  }
 
-                  mapStepCounter++;
-                  if (mapStepCounter == totalSteps) {
-                    let storeStepCounter = 0;
-                    const totalStoreSteps = all_res.length;
-                    // console.log("total store steps:", totalStoreSteps);
-                    if (storeStepCounter == totalStoreSteps) {
-                      return callback(null, []);
+                    mapStepCounter++;
+                    if (mapStepCounter == totalSteps) {
+                      let storeStepCounter = 0;
+                      const totalStoreSteps = all_res.length;
+                      // console.log("total store steps:", totalStoreSteps);
+                      if (storeStepCounter == totalStoreSteps) {
+                        return callback(null, []);
+                      }
+                      all_res.forEach((kv) => {
+                        const k = Object.keys(kv)[0];
+                        const v = Object.values(kv)[0];
+                        distribution.local.store.append(v, {gid: `${mrID}_map`, key: k}, (e, v) => {
+                          storeStepCounter++;
+                          // console.log("store step counter:", storeStepCounter);
+                          if (storeStepCounter == totalStoreSteps) {
+                            return callback(null, all_res);
+                          }
+                        });
+                      })
                     }
-                    all_res.forEach((kv) => {
-                      const k = Object.keys(kv)[0];
-                      const v = Object.values(kv)[0];
-                      distribution.local.store.append(v, {gid: `${mrID}_map`, key: k}, (e, v) => {
-                        storeStepCounter++;
-                        // console.log("store step counter:", storeStepCounter);
-                        if (storeStepCounter == totalStoreSteps) {
-                          return callback(null, all_res);
-                        }
-                      });
-                    })
-                  }
-                });
+                  });
 
-                // console.log(mrGid, ": ", map_res);
+                  // console.log(mrGid, ": ", map_res);
 
+                })
               })
-            })
+
+            }, index * 100);
           })
         })
       },
