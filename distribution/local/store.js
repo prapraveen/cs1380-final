@@ -76,6 +76,19 @@ function get(configuration, callback) {
  * @param {SimpleConfig} configuration
  * @param {Callback} callback
  */
+function keyExists(configuration, callback) {
+  if (!configuration || !configuration.gid) {
+    configuration = {key: configuration, gid: "local"};
+  }
+
+  const exists = fs.existsSync(`${path}/${configuration.gid}/${configuration.key}`, 'utf8');
+  return callback(null, exists);
+}
+
+/**
+ * @param {SimpleConfig} configuration
+ * @param {Callback} callback
+ */
 function del(configuration, callback) {
  if (!configuration.gid) {
    configuration = {key: configuration, gid: "local"};
@@ -125,4 +138,4 @@ function append(state, configuration, callback) {
   })
 }
 
-module.exports = {put, get, del, append};
+module.exports = {put, get, del, append, keyExists};

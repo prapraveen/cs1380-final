@@ -88,11 +88,11 @@ function mr(config) {
             return callback(null, []);
           }
           v.forEach((key) => {
-            console.log("KEY: ", key);
+            // console.log("KEY: ", key);
             distribution.local.store.get({gid: mrGid, key: key}, (e, value) => {
-              console.log(mrGid, ": ", value);
+              // console.log(mrGid, ": ", value);
               if (value === null) {
-                return;
+                return callback(null, []);
               }
               // if (e) console.log(e);
               distribution.local.routes.get(mrID, (e, f) => {
@@ -109,7 +109,7 @@ function mr(config) {
                   if (mapStepCounter == totalSteps) {
                     let storeStepCounter = 0;
                     const totalStoreSteps = all_res.length;
-                    console.log("total store steps:", totalStoreSteps);
+                    // console.log("total store steps:", totalStoreSteps);
                     if (storeStepCounter == totalStoreSteps) {
                       return callback(null, []);
                     }
@@ -118,7 +118,7 @@ function mr(config) {
                       const v = Object.values(kv)[0];
                       distribution.local.store.append(v, {gid: `${mrID}_map`, key: k}, (e, v) => {
                         storeStepCounter++;
-                        console.log("store step counter:", storeStepCounter);
+                        // console.log("store step counter:", storeStepCounter);
                         if (storeStepCounter == totalStoreSteps) {
                           return callback(null, all_res);
                         }
@@ -209,17 +209,17 @@ function mr(config) {
     // Register the mr service on all nodes in the group and execute in sequence: map, shuffle, reduce.
     distribution[context.gid].routes.put(mrService, mrID, (e, v) => {
       // console.log(mrID);
-        console.log("step 1:");
+        // console.log("step 1:");
       distribution[context.gid].comm.send([context.gid, mrID], {service: mrID, method: "map"}, (e, v) => {
-        console.log("step 2:", v);
+        // console.log("step 2:", v);
         distribution.local.groups.get(context.gid, (e, v) => {
-            console.log("step 3:", v);
+            // console.log("step 3:", v);
           distribution[context.gid].groups.put({gid: mrGid}, v, (e, v) => {
-              console.log("step 4:", v);
+              // console.log("step 4:", v);
             distribution[context.gid].comm.send([mrGid, mrID], {service: mrID, method: "shuffle"}, (e, v) => {
-                console.log("step 5:", v);
+                // console.log("step 5:", v);
               distribution[context.gid].comm.send([mrGid, mrID], {service: mrID, method: "reduce"}, (e, v) => {
-                  console.log("step 6:", v);
+                  // console.log("step 6:", v);
                 // cleanup
                 distribution[context.gid].comm.send([mrGid, mrID], {service: mrID, method: "cleanup"}, () => {
                   // distribution[context.gid].groups.del(mrGid, () => {

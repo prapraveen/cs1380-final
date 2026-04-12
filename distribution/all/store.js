@@ -52,6 +52,24 @@ function store(config) {
   }
 
   /**
+   * @param {SimpleConfig} configuration
+   * @param {Callback} callback
+   */
+  function keyExists(configuration, callback) {
+    distribution.local.groups.get(context.gid, (e, v) => {
+      if (e) return callback(e);
+      const nids = Object.values(v).map(id.getNID);
+      const kid = id.getID(configuration);
+      const nid = context.hash(kid, nids);
+      const sid = nid.substring(0, 5);
+      const node = v[sid]
+
+      const message = [{key: configuration, gid: context.gid}];
+      distribution.local.comm.send(message, {service: "store", node: node, method: "keyExists"}, callback);
+    });
+  }
+
+  /**
    * @param {any} state
    * @param {SimpleConfig} configuration
    * @param {Callback} callback
@@ -123,7 +141,7 @@ function store(config) {
 
   /* For the distributed store service, the configuration will
           always be a string */
-  return {get, put, append, del, reconf};
+  return {get, put, append, del, reconf, keyExists};
 }
 
 module.exports = store;
