@@ -84,6 +84,9 @@ function mr(config) {
           let all_res = [];
           let mapStepCounter = 0;
           const totalSteps = v.length;
+          if (totalSteps == 0) {
+            return callback(null, []);
+          }
           v.forEach((key) => {
             console.log("KEY: ", key);
             distribution.local.store.get({gid: mrGid, key: key}, (e, value) => {
@@ -107,6 +110,9 @@ function mr(config) {
                     let storeStepCounter = 0;
                     const totalStoreSteps = all_res.length;
                     console.log("total store steps:", totalStoreSteps);
+                    if (storeStepCounter == totalStoreSteps) {
+                      return callback(null, []);
+                    }
                     all_res.forEach((kv) => {
                       const k = Object.keys(kv)[0];
                       const v = Object.values(kv)[0];
