@@ -79,6 +79,7 @@ function mr(config) {
         // Expected output: array of objects with a single key per object.
         // console.log("entered map");
         distribution.local.store.get({gid: mrGid, key: null}, (e, v) => {
+          v = v.slice(0, 100);
           if (e) return callback(e, v);
           // console.log("all keys: ", v);
           let all_res = [];
@@ -89,7 +90,7 @@ function mr(config) {
           }
           console.log("reached 1");
           v.forEach((key, index) => {
-            // setTimeout(() => {
+            setTimeout(() => {
               // console.log("KEY: ", key);
               distribution.local.store.get({gid: mrGid, key: key}, (e, value) => {
                 // console.log(mrGid, ": ", value);
@@ -134,7 +135,7 @@ function mr(config) {
                 })
               })
 
-            // }, index * 100);
+            }, index * 100);
           })
         })
       },

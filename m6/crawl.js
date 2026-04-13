@@ -163,12 +163,9 @@ distribution.local.groups.put({gid: "urls_queue", hash: id.naiveHash}, groupA, (
                         if (newURLsCounter == totalNewUrls) {
                           return cb(res);
                         }
-                        console.log("total", totalNewUrls);
                         res.forEach((u) => {
                           let newHashedURL = distribution.util.id.getID(u);
                           distribution.page_content.store.keyExists(newHashedURL, (e, exists) => {
-                            console.log(e)
-                            console.log(exists);
                             if (exists) {
                               newURLsCounter++;
                               if (newURLsCounter == totalNewUrls) {
