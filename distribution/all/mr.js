@@ -87,8 +87,9 @@ function mr(config) {
           if (totalSteps == 0) {
             return callback(null, []);
           }
+          console.log("reached 1");
           v.forEach((key, index) => {
-            setTimeout(() => {
+            // setTimeout(() => {
               // console.log("KEY: ", key);
               distribution.local.store.get({gid: mrGid, key: key}, (e, value) => {
                 // console.log(mrGid, ": ", value);
@@ -133,7 +134,7 @@ function mr(config) {
                 })
               })
 
-            }, index * 100);
+            // }, index * 100);
           })
         })
       },
@@ -212,17 +213,17 @@ function mr(config) {
     // Register the mr service on all nodes in the group and execute in sequence: map, shuffle, reduce.
     distribution[context.gid].routes.put(mrService, mrID, (e, v) => {
       // console.log(mrID);
-        // console.log("step 1:");
+        console.log("step 1:");
       distribution[context.gid].comm.send([context.gid, mrID], {service: mrID, method: "map"}, (e, v) => {
-        // console.log("step 2:", v);
+        console.log("step 2:");
         distribution.local.groups.get(context.gid, (e, v) => {
-            // console.log("step 3:", v);
+            console.log("step 3:");
           distribution[context.gid].groups.put({gid: mrGid}, v, (e, v) => {
-              // console.log("step 4:", v);
+              console.log("step 4:");
             distribution[context.gid].comm.send([mrGid, mrID], {service: mrID, method: "shuffle"}, (e, v) => {
-                // console.log("step 5:", v);
+                console.log("step 5:");
               distribution[context.gid].comm.send([mrGid, mrID], {service: mrID, method: "reduce"}, (e, v) => {
-                  // console.log("step 6:", v);
+                  console.log("step 6:");
                 // cleanup
                 distribution[context.gid].comm.send([mrGid, mrID], {service: mrID, method: "cleanup"}, () => {
                   // distribution[context.gid].groups.del(mrGid, () => {

@@ -20,7 +20,7 @@ groupA[id.getSID(n3)] = n3;
 
 // let seed_urls = ["apartments.com", "craigslist.org", "zillow.com", "airbnb.com"];
 let seed_urls = ["https://en.wikipedia.org/wiki/distributed_computing"];
-let seed_url_keys = seed_urls.map(encodeURIComponent);
+let seed_url_keys = seed_urls.map(distribution.util.id.getID);
 
 
 distribution.local.groups.put({gid: "urls_queue", hash: id.naiveHash}, groupA, (e, v) => {
@@ -43,10 +43,10 @@ distribution.local.groups.put({gid: "urls_queue", hash: id.naiveHash}, groupA, (
         }
 
         insert_items(0, () => {
-          const mapper = (encodedURL, url, cb) => {
-            distribution.page_content.store.keyExists(encodedURL, (e, exists) => {
+          const mapper = (hashedURL, url, cb) => {
+            distribution.page_content.store.keyExists(hashedURL, (e, exists) => {
               if (exists) {
-                distribution.urls_queue.store.del(encodedURL, (e, v) => {
+                distribution.urls_queue.store.del(hashedURL, (e, v) => {
                   return cb([]);
                 })
               } else {
@@ -130,11 +130,11 @@ distribution.local.groups.put({gid: "urls_queue", hash: id.naiveHash}, groupA, (
 
                 curlHTML(url, 3, (data) => {
                   if (data === "") {
-                    distribution.urls_queue.store.del(encodedURL, (e, v) => {
+                    distribution.urls_queue.store.del(hashedURL, (e, v) => {
                       return cb([]);
                     })
                   } else {
-                    distribution["page_content"].store.put(data, encodedURL, (e, v) => {
+                    distribution.page_content.store.put({url: url, body: data}, hashedURL, (e, v) => {
                       if (e) console.log("line 67:", e);
                       res = [];
                       const dom = new distribution.JSDOM(data);
@@ -156,28 +156,31 @@ distribution.local.groups.put({gid: "urls_queue", hash: id.naiveHash}, groupA, (
                         res.push(new_url);
                       }
 
-                      distribution.urls_queue.store.del(encodedURL, (e, v) => {
+                      distribution.urls_queue.store.del(hashedURL, (e, v) => {
                         if (e) console.log(e);
                         let newURLsCounter = 0;
                         let totalNewUrls = res.length
                         if (newURLsCounter == totalNewUrls) {
                           return cb(res);
                         }
+                        console.log("total", totalNewUrls);
                         res.forEach((u) => {
-                          let encodedURL = encodeURIComponent(u);
-                          distribution.page_content.store.keyExists(encodedURL, (e, exists) => {
+                          let newHashedURL = distribution.util.id.getID(u);
+                          distribution.page_content.store.keyExists(newHashedURL, (e, exists) => {
+                            console.log(e)
+                            console.log(exists);
                             if (exists) {
                               newURLsCounter++;
                               if (newURLsCounter == totalNewUrls) {
-                                res = res.map((u) => {return {[encodeURIComponent(u)]: 1}; });
+                                res = res.map((u) => {return {[newHashedURL]: 1}; });
                                 return cb(res);
                               } 
                             } else {
-                              distribution.urls_queue.store.put(u, encodeURIComponent(u), (e, v) => {
+                              distribution.urls_queue.store.put(u, newHashedURL, (e, v) => {
                                 if (e) console.log(e);
                                 newURLsCounter++;
                                 if (newURLsCounter == totalNewUrls) {
-                                  res = res.map((u) => {return {[encodeURIComponent(u)]: 1}; });
+                                  res = res.map((u) => {return {[newHashedURL]: 1}; });
                                   return cb(res);
                                 }
                               })
@@ -190,13 +193,12 @@ distribution.local.groups.put({gid: "urls_queue", hash: id.naiveHash}, groupA, (
                   }
                 })
               }
-
             })
 
           }
 
-          const reducer = (encodedURL, values) => {
-            return {[encodedURL]: 1};
+          const reducer = (hashedURL, values) => {
+            return {[hashedURL]: 1};
           }
 
           distribution.urls_queue.store.get(null, (e, v) => {
@@ -205,8 +207,9 @@ distribution.local.groups.put({gid: "urls_queue", hash: id.naiveHash}, groupA, (
             const start = performance.now();
             distribution.urls_queue.mr.exec({keys: v, map: mapper, reduce: reducer}, (e, v) => {
               const total_time = performance.now() - start;
+              console.log("done in", total_time);
               // console.log("v:", v);
-              const values = Object.keys(v[0]).map(url => decodeURIComponent(url));
+              // const values = Object.keys(v[0]).map(url => decodeURIComponent(url));
               // console.log(`Total time for ${values.length} matches: ${total_time}`);
             })
           })
