@@ -136,57 +136,10 @@ distribution.local.groups.put({gid: "urls_queue", hash: id.naiveHash}, groupA, (
                   } else {
                     distribution.page_content.store.put({url: url, body: data}, hashedURL, (e, v) => {
                       if (e) console.log("line 67:", e);
-                      res = [];
-                      const dom = new distribution.JSDOM(data);
-                      const anchors = dom.window.document.querySelectorAll('a[href]');
-
-                      for (const anchor of anchors) {
-                        const href = anchor.getAttribute('href');
-                        if (href.startsWith("#")) continue;
-
-                        let baseURL = url;
-                        if (baseURL.endsWith('index.html')) {
-                          baseURL = baseURL.slice(0, baseURL.length - 'index.html'.length);
-                        } else if (!baseURL.endsWith('/')) {
-                          baseURL += '/';
-                        }
-
-                        const new_url = new distribution.URL(href, baseURL).href;
-                        // res.push( {[encodeURIComponent(new_url)]: 1} );
-                        res.push(new_url);
-                      }
 
                       distribution.urls_queue.store.del(hashedURL, (e, v) => {
                         if (e) console.log(e);
-                        let newURLsCounter = 0;
-                        let totalNewUrls = res.length
-                        if (newURLsCounter == totalNewUrls) {
-                          return cb([]);
-                        }
-                        res.forEach((u, idx) => {
-                          setTimeout(() => {
-                            let newHashedURL = distribution.util.id.getID(u);
-                            distribution.page_content.store.keyExists(newHashedURL, (e, exists) => {
-                              if (exists) {
-                                newURLsCounter++;
-                                if (newURLsCounter == totalNewUrls) {
-                                  res = res.map((u) => {return {[newHashedURL]: 1}; });
-                                  return cb([]);
-                                } 
-                              } else {
-                                distribution.urls_queue.store.put(u, newHashedURL, (e, v) => {
-                                  if (e) console.log("error trying to store:", e);
-                                  newURLsCounter++;
-                                  if (newURLsCounter == totalNewUrls) {
-                                    res = res.map((u) => {return {[newHashedURL]: 1}; });
-                                    return cb([]);
-                                  }
-                                })
-                              }
-                            })
-
-                          }, 10 * idx)
-                        })
+                        return cb([]);
                       })
                     })
 

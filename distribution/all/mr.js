@@ -79,7 +79,7 @@ function mr(config) {
         // Expected output: array of objects with a single key per object.
         // console.log("entered map");
         distribution.local.store.get({gid: mrGid, key: null}, (e, v) => {
-          v = v.slice(0, 100);
+          // v = v.slice(0, 100);
           if (e) return callback(e, v);
           // console.log("all keys: ", v);
           let all_res = [];
@@ -88,7 +88,6 @@ function mr(config) {
           if (totalSteps == 0) {
             return callback(null, []);
           }
-          console.log("reached 1");
           v.forEach((key, index) => {
             setTimeout(() => {
               // console.log("KEY: ", key);
@@ -117,15 +116,17 @@ function mr(config) {
                         return callback(null, []);
                       }
                       all_res.forEach((kv) => {
-                        const k = Object.keys(kv)[0];
-                        const v = Object.values(kv)[0];
-                        distribution.local.store.append(v, {gid: `${mrID}_map`, key: k}, (e, v) => {
-                          storeStepCounter++;
-                          // console.log("store step counter:", storeStepCounter);
-                          if (storeStepCounter == totalStoreSteps) {
-                            return callback(null, all_res);
-                          }
-                        });
+                        // setTimeout(() => {
+                          const k = Object.keys(kv)[0];
+                          const v = Object.values(kv)[0];
+                          distribution.local.store.append(v, {gid: `${mrID}_map`, key: k}, (e, v) => {
+                            storeStepCounter++;
+                            // console.log("store step counter:", storeStepCounter);
+                            if (storeStepCounter == totalStoreSteps) {
+                              return callback(null, all_res);
+                            }
+                          });
+                        // }, 100);
                       })
                     }
                   });
@@ -135,7 +136,7 @@ function mr(config) {
                 })
               })
 
-            }, index * 100);
+            }, index * 300);
           })
         })
       },
