@@ -9,9 +9,9 @@ const id = distribution.util.id;
 const ENQUEUE_DELAY_MS = 50;
 const STORE_RETRY_MS = 200;
 
-const n1 = {ip: '127.0.0.1', port: 8000};
-const n2 = {ip: '127.0.0.1', port: 8001};
-const n3 = {ip: '127.0.0.1', port: 8002};
+const n1 = {ip: '172.31.42.233', port: 8000};
+const n2 = {ip: '172.31.44.77', port: 8000};
+const n3 = {ip: '172.31.37.180', port: 8000};
 const allNodes = [n1, n2, n3];
 
 const groupA = {};
