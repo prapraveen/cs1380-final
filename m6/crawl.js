@@ -19,7 +19,7 @@ groupA[id.getSID(n2)] = n2;
 groupA[id.getSID(n3)] = n3;
 
 // let seed_urls = ["apartments.com", "craigslist.org", "zillow.com", "airbnb.com"];
-let seed_urls = ["https://en.wikipedia.org/wiki/distributed_computing"];
+let seed_urls = ["https://en.wikipedia.org/wiki/distributed_computing", "https://en.wikipedia.org/wiki/American_Civil_War"];
 let seed_url_keys = seed_urls.map(distribution.util.id.getID);
 
 
