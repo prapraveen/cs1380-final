@@ -6,8 +6,6 @@ const { performance } = require('node:perf_hooks');
 
 
 const id = distribution.util.id;
-const ENQUEUE_DELAY_MS = 50;
-const STORE_RETRY_MS = 200;
 
 const n1 = {ip: '172.31.42.233', port: 8000};
 const n2 = {ip: '172.31.44.77', port: 8000};
@@ -46,6 +44,9 @@ distribution.local.groups.put({gid: "urls_queue", hash: id.naiveHash}, groupA, (
 
         insert_items(0, () => {
           const mapper = (hashedURL, url, cb) => {
+            const enqueueDelayMs = 50;
+            const storeRetryMs = 200;
+
             distribution.page_content.store.keyExists(hashedURL, (e, exists) => {
               if (exists) {
                 distribution.urls_queue.store.del(hashedURL, (e, v) => {
@@ -173,7 +174,7 @@ distribution.local.groups.put({gid: "urls_queue", hash: id.naiveHash}, groupA, (
                             }
 
                             const continueToNext = () => {
-                              setTimeout(() => enqueueNextUrl(index + 1), ENQUEUE_DELAY_MS);
+                              setTimeout(() => enqueueNextUrl(index + 1), enqueueDelayMs);
                             };
 
                             if (exists) {
@@ -188,7 +189,7 @@ distribution.local.groups.put({gid: "urls_queue", hash: id.naiveHash}, groupA, (
 
                                 console.log("error trying to store:", putError);
                                 if (attempt < 2) {
-                                  return setTimeout(() => tryPut(attempt + 1), STORE_RETRY_MS * (attempt + 1));
+                                  return setTimeout(() => tryPut(attempt + 1), storeRetryMs * (attempt + 1));
                                 }
 
                                 continueToNext();
