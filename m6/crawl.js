@@ -6,6 +6,8 @@ const { performance } = require('node:perf_hooks');
 
 
 const id = distribution.util.id;
+const ENQUEUE_DELAY_MS = 50;
+const STORE_RETRY_MS = 200;
 
 const n1 = {ip: '127.0.0.1', port: 8000};
 const n2 = {ip: '127.0.0.1', port: 8001};
@@ -136,7 +138,7 @@ distribution.local.groups.put({gid: "urls_queue", hash: id.naiveHash}, groupA, (
                   } else {
                     distribution.page_content.store.put({url: url, body: data}, hashedURL, (e, v) => {
                       if (e) console.log("line 67:", e);
-                      res = [];
+                      const discoveredUrls = [];
                       const dom = new distribution.JSDOM(data);
                       const anchors = dom.window.document.querySelectorAll('a[href]');
 
@@ -152,41 +154,52 @@ distribution.local.groups.put({gid: "urls_queue", hash: id.naiveHash}, groupA, (
                         }
 
                         const new_url = new distribution.URL(href, baseURL).href;
-                        // res.push( {[encodeURIComponent(new_url)]: 1} );
-                        res.push(new_url);
+                        discoveredUrls.push(new_url);
                       }
 
                       distribution.urls_queue.store.del(hashedURL, (e, v) => {
                         if (e) console.log(e);
-                        let newURLsCounter = 0;
-                        let totalNewUrls = res.length
-                        if (newURLsCounter == totalNewUrls) {
-                          return cb([]);
-                        }
-                        res.forEach((u, idx) => {
-                          setTimeout(() => {
-                            let newHashedURL = distribution.util.id.getID(u);
-                            distribution.page_content.store.keyExists(newHashedURL, (e, exists) => {
-                              if (exists) {
-                                newURLsCounter++;
-                                if (newURLsCounter == totalNewUrls) {
-                                  res = res.map((u) => {return {[newHashedURL]: 1}; });
-                                  return cb([]);
-                                } 
-                              } else {
-                                distribution.urls_queue.store.put(u, newHashedURL, (e, v) => {
-                                  if (e) console.log("error trying to store:", e);
-                                  newURLsCounter++;
-                                  if (newURLsCounter == totalNewUrls) {
-                                    res = res.map((u) => {return {[newHashedURL]: 1}; });
-                                    return cb([]);
-                                  }
-                                })
-                              }
-                            })
+                        const enqueueNextUrl = (index) => {
+                          if (index >= discoveredUrls.length) {
+                            return cb([]);
+                          }
 
-                          }, 10 * idx)
-                        })
+                          const nextUrl = discoveredUrls[index];
+                          const nextHashedUrl = distribution.util.id.getID(nextUrl);
+
+                          distribution.page_content.store.keyExists(nextHashedUrl, (existsError, exists) => {
+                            if (existsError) {
+                              console.log("error checking page_content before enqueue:", existsError);
+                            }
+
+                            const continueToNext = () => {
+                              setTimeout(() => enqueueNextUrl(index + 1), ENQUEUE_DELAY_MS);
+                            };
+
+                            if (exists) {
+                              return continueToNext();
+                            }
+
+                            const tryPut = (attempt) => {
+                              distribution.urls_queue.store.put(nextUrl, nextHashedUrl, (putError) => {
+                                if (!putError) {
+                                  return continueToNext();
+                                }
+
+                                console.log("error trying to store:", putError);
+                                if (attempt < 2) {
+                                  return setTimeout(() => tryPut(attempt + 1), STORE_RETRY_MS * (attempt + 1));
+                                }
+
+                                continueToNext();
+                              });
+                            };
+
+                            tryPut(0);
+                          });
+                        };
+
+                        enqueueNextUrl(0);
                       })
                     })
 
