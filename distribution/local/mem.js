@@ -13,7 +13,7 @@ const id = distribution.util.id;
  * @typedef {StoreConfig | string | null} SimpleConfig
  */
 
-const memory = {};
+const memory = Object.create(null);
 
 
 /**
@@ -30,8 +30,8 @@ function put(state, configuration, callback) {
     configuration.key = id.getID(state);
   }
 
-  if (!memory[configuration.gid]) {
-    memory[configuration.gid] = {};
+  if (!Object.prototype.hasOwnProperty.call(memory, configuration.gid)) {
+    memory[configuration.gid] = Object.create(null);
   }
   memory[configuration.gid][configuration.key] = state;
   return callback(null, state);
@@ -82,7 +82,7 @@ function get(configuration, callback) {
     configuration = {key: configuration, gid: "local"};
   }
 
-  if (!memory[configuration.gid]) {
+  if (!Object.prototype.hasOwnProperty.call(memory, configuration.gid)) {
     if (configuration.key == null) {
       return callback(null, []);
     }
@@ -95,7 +95,10 @@ function get(configuration, callback) {
     return callback(null, Object.keys(memory[configuration.gid]));
   }
 
-  if (!memory[configuration.gid][configuration.key]) {
+  if (!Object.prototype.hasOwnProperty.call(
+      memory[configuration.gid],
+      configuration.key,
+  )) {
     const e = new Error("Key not found in GID.");
     e.code = "NOT FOUND";
     return callback(e, null);
@@ -113,11 +116,14 @@ function del(configuration, callback) {
     configuration = {key: configuration, gid: "local"};
   }
 
-  if (!memory[configuration.gid]) {
+  if (!Object.prototype.hasOwnProperty.call(memory, configuration.gid)) {
     return callback(new Error("GID not in local memory."), null);
   }
 
-  if (!memory[configuration.gid][configuration.key]) {
+  if (!Object.prototype.hasOwnProperty.call(
+      memory[configuration.gid],
+      configuration.key,
+  )) {
     return callback(new Error("Key not found in GID."), null);
   }
   const ret = memory[configuration.gid][configuration.key];
