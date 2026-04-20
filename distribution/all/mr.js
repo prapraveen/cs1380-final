@@ -131,7 +131,7 @@ function mr(config) {
       ) {
         // Map should read the node's local keys under the mrGid gid and write to store under gid `${mrID}_map`.
         // Expected output: array of objects with a single key per object.
-        keys = keys.slice(0, 250);
+        keys = keys.slice(0, 1);
         
         if (keys.length === 0) {
           return globalThis.distribution.local.store.put([], `${mrID}_map`, callback);
@@ -220,12 +220,11 @@ function mr(config) {
 
             let pending = pairs.length;
             let finished = false;
-            let nextIdx = 0;
-            const CONCURRENCY = 20;
 
-            function sendNext() {
-              if (finished || nextIdx >= pairs.length) return;
-              const [key, value] = pairs[nextIdx++];
+            pairs.forEach(([key, value]) => {
+              if (finished) {
+                return;
+              }
 
               const kid = globalThis.distribution.util.id.getID(key);
               const targetNid = globalThis.distribution.util.id.naiveHash(kid, nids);
@@ -249,7 +248,9 @@ function mr(config) {
                 appendValueMessage,
                 appendValueRemote,
                 (appendError) => {
-                  if (finished) return;
+                  if (finished) {
+                    return;
+                  }
 
                   if (appendError) {
                     finished = true;
@@ -262,14 +263,9 @@ function mr(config) {
                       callback(null, mappedValues);
                     });
                   }
-                  sendNext();
                 },
               );
-            }
-
-            for (let i = 0; i < Math.min(CONCURRENCY, pairs.length); i++) {
-              sendNext();
-            }
+            });
           });
         });
       },
