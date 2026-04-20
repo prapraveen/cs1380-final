@@ -25,7 +25,7 @@ distribution.local.groups.put({ gid: 'page_content', hash: id.naiveHash }, group
 			const totalDocs = keys.length;
 			console.log(`Indexing ${totalDocs} pages...`);
 
-			const mapper = (hashedURL, page, cb) => {
+			const mapper = (hashedURL, page) => {
 				const path = require('path');
 				const m6 = path.join(process.cwd(), 'm6', 'c');
 				const { getText } = require(path.join(m6, 'getText.js'));
@@ -34,15 +34,13 @@ distribution.local.groups.put({ gid: 'page_content', hash: id.naiveHash }, group
 
 				const { url, body } = page;
 
-				console.log(`Processing ${url}`);
-
 				const stopwords = path.join(process.cwd(), 'm6', 'd', 'stopwords.txt');
 				const text = getText(body);
 				const filtered = processText(text, stopwords);
 				const terms = stemTerms(filtered);
 					// .slice(0, 100);
 
-				if (terms.length === 0) return cb([]);
+				if (terms.length === 0) return [];
 
 				const counts = Object.create(null);
 				const totalTerms = terms.length;
@@ -53,10 +51,13 @@ distribution.local.groups.put({ gid: 'page_content', hash: id.naiveHash }, group
 				const res = Object.entries(counts).map(([term, tf]) => ({
 					[term]: { [url]: tf },
 				}));
-				cb(res);
+				return res;
 			};
 
 			const reducer = eval(`(key, values) => {
+				if (!Array.isArray(values) || values.length === 0) {
+					return null;
+				}
 				const idf = Math.log10(${totalDocs} / values.length);
 				const result = {};
 				for (const val of values) {
@@ -72,6 +73,7 @@ distribution.local.groups.put({ gid: 'page_content', hash: id.naiveHash }, group
 				if (e) { console.error(e); process.exit(1); }
 
 				const lines = results
+					.filter(Boolean)
 					.map(obj => {
 						const [term, docScores] = Object.entries(obj)[0];
 						const sorted = Object.entries(docScores).sort((a, b) => b[1] - a[1]);

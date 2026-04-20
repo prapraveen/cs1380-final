@@ -1,4 +1,3 @@
-const id = distribution.util.id;
 // @ts-check
 /**
  * @typedef {import("../types.js").Callback} Callback
@@ -48,14 +47,68 @@ function mr(config) {
     gid: config.gid || 'all',
   };
 
+  function getError(error) {
+    if (!error) {
+      return null;
+    }
+
+    if (error instanceof Error) {
+      return error;
+    }
+
+    const errors = Object.values(error).filter(Boolean);
+    return errors.length > 0 ? errors[0] : null;
+  }
+
+  function partitionKeys(keys, group) {
+    const entries = Object.entries(group);
+    const partitions = {};
+    const nids = entries.map(([, node]) => {
+      return globalThis.distribution.util.id.getNID(node);
+    });
+
+    entries.forEach(([sid]) => {
+      partitions[sid] = [];
+    });
+
+    keys.forEach((key) => {
+      const kid = globalThis.distribution.util.id.getID(key);
+      const targetNid = globalThis.distribution.util.id.naiveHash(kid, nids);
+      const targetEntry = entries.find(([, node]) => {
+        return globalThis.distribution.util.id.getNID(node) === targetNid;
+      });
+
+      if (targetEntry) {
+        partitions[targetEntry[0]].push(key);
+      }
+    });
+
+    return partitions;
+  }
+
+  function flattenResults(values) {
+    return Object.values(values).reduce((results, value) => {
+      if (Array.isArray(value)) {
+        return results.concat(value);
+      }
+
+      if (value === null || value === undefined) {
+        return results;
+      }
+
+      results.push(value);
+      return results;
+    }, ([]));
+  }
+
   /**
    * @param {MRConfig} configuration
    * @param {Callback} callback
    * @returns {void}
    */
   function exec(configuration, callback) {
-    const mrID = id.getID(`${configuration}${Date.now()}`);
-    const mrGid = `mr${mrID}`;
+    const mrID = globalThis.distribution.util.id.getID(`${configuration}${Date.now()}`);
+    const mrServiceName = `mr${mrID}`;
 
     /*
       MapReduce steps:
@@ -71,83 +124,60 @@ function mr(config) {
       mapper: configuration.map,
       reducer: configuration.reduce,
       map: function (
-          /** @type {string} */ mrGid,
+          /** @type {string[]} */ keys,
+          /** @type {string} */ gid,
           /** @type {string} */ mrID,
           /** @type {Callback} */ callback,
       ) {
         // Map should read the node's local keys under the mrGid gid and write to store under gid `${mrID}_map`.
         // Expected output: array of objects with a single key per object.
-        // console.log("entered map");
-        distribution.local.store.get({ gid: mrGid, key: null }, (e, v) => {
-          // v = v.slice(0, 100);
-          if (e) return callback(e, v);
-          // console.log("all keys: ", v);
-          let all_res = [];
-          let mapStepCounter = 0;
-          v = v.slice(0,10);
-          const totalSteps = v.length;
-          if (totalSteps == 0) {
-            console.log("cb 1");
-            return callback(null, []);
-          }
-          console.log("num keys for", mrGid, "is:", v.length);
-          v.forEach((key, index) => {
-              if (index % 5 == 0) {
-                console.log("Reached index", index);
+        keys = keys.slice(0, 10);
+        
+        if (keys.length === 0) {
+          return globalThis.distribution.local.store.put([], `${mrID}_map`, callback);
+        }
+
+        const mappedValues = [];
+        let pending = keys.length;
+        let finished = false;
+
+        keys.forEach((key) => {
+          const localConfig = { key, gid };
+          globalThis.distribution.local.store.get(localConfig, (localError, localValue) => {
+            const onValue = (error, value) => {
+              if (finished) {
+                return;
               }
-              // console.log("KEY: ", key);
-              distribution.local.store.get({ gid: mrGid, key: key }, (e, value) => {
-                // console.log(mrGid, ": ", value);
-                if (e) console.log("ERROR RETRIEVING FROM STORE:", e);
-                if (value === null) {
-                  console.log("cb 2");
-                  return callback(null, []);
-                }
-                // if (e) console.log(e);
-                distribution.local.routes.get(mrID, (e, f) => {
-                  let map_res = f.mapper(key, value, (v) => {
-                    if (v instanceof Array) {
-                      for (const elt of v) {
-                        all_res.push(elt)
-                      }
-                    } else {
-                      all_res.push(v);
-                    }
 
-                    mapStepCounter++;
-                    if (mapStepCounter == totalSteps) {
-                      let storeStepCounter = 0;
-                      const totalStoreSteps = all_res.length;
-                      console.log("Store steps: ", totalStoreSteps);
-                      // console.log("total store steps:", totalStoreSteps);
-                      if (storeStepCounter == totalStoreSteps) {
-                        console.log("cb 3");
-                        return callback(null, []);
-                      }
-                      all_res.forEach((kv) => {
-                        // setTimeout(() => {
-                        const k = Object.keys(kv)[0];
-                        const v = Object.values(kv)[0];
-                        distribution.local.store.append(v, { gid: `${mrID}_map`, key: k }, (e, v) => {
-                          storeStepCounter++;
-                          // console.log("store step counter:", storeStepCounter);
-                          if (storeStepCounter == totalStoreSteps) {
-                            console.log("cb 5");
-                            return callback(null, all_res);
-                          }
-                        });
-                        // }, 100);
-                      })
-                    }
-                  });
+              if (error) {
+                finished = true;
+                return callback(error, null);
+              }
 
-                  // console.log(mrGid, ": ", map_res);
+              const mapped = this.mapper(key, value);
+              if (Array.isArray(mapped)) {
+                mappedValues.push(...mapped);
+              } else if (mapped !== null && mapped !== undefined) {
+                mappedValues.push(mapped);
+              }
 
-                })
-              })
+              pending--;
+              if (pending === 0) {
+                return globalThis.distribution.local.store.put(
+                  mappedValues,
+                  `${mrID}_map`,
+                  callback,
+                );
+              }
+            };
 
-          })
-        })
+            if (!localError) {
+              return onValue(null, localValue);
+            }
+
+            return globalThis.distribution[gid].store.get(key, onValue);
+          });
+        });
       },
       shuffle: function (
           /** @type {string} */ gid,
@@ -156,22 +186,88 @@ function mr(config) {
       ) {
         // Fetch the mapped values from the local store
         // Shuffle groups values by key (via store.append).
-        distribution.local.store.get({ gid: `${mrID}_map`, key: null }, (e, v) => {
-          if (e) return callback(e, null);
-          const appendStep = (idx) => {
-            if (idx == v.length) {
-              return callback(null, true);
+        return globalThis.distribution.local.store.get(`${mrID}_map`, (error, mappedValues) => {
+          if (error) {
+            return callback(error, null);
+          }
+
+          const pairs = ([]);
+          mappedValues.forEach((mappedValue) => {
+            if (!mappedValue || typeof mappedValue !== 'object') {
+              return;
             }
 
-            const key = v[idx];
-            distribution.local.store.get({ gid: `${mrID}_map`, key: key }, (e, val) => {
-              distribution[gid].store.append(val, key, (e, v) => {
-                appendStep(idx + 1);
-              })
-            })
+            Object.entries(mappedValue).forEach(([key, value]) => {
+              pairs.push([key, value]);
+            });
+          });
+
+          if (pairs.length === 0) {
+            return globalThis.distribution.local.store.del(`${mrID}_map`, () => {
+              callback(null, mappedValues);
+            });
           }
-          appendStep(0);
-        })
+
+          return globalThis.distribution.local.groups.get(gid, (groupError, group) => {
+            if (groupError || !group) {
+              return callback(groupError || new Error(`unknown group ${gid}`), null);
+            }
+
+            const entries = Object.entries(group);
+            const nids = entries.map(([, node]) => {
+              return globalThis.distribution.util.id.getNID(node);
+            });
+
+            let pending = pairs.length;
+            let finished = false;
+
+            pairs.forEach(([key, value]) => {
+              if (finished) {
+                return;
+              }
+
+              const kid = globalThis.distribution.util.id.getID(key);
+              const targetNid = globalThis.distribution.util.id.naiveHash(kid, nids);
+              const targetNode = entries.find(([, node]) => {
+                return globalThis.distribution.util.id.getNID(node) === targetNid;
+              });
+
+              if (!targetNode) {
+                finished = true;
+                return callback(new Error('unknown target node'), null);
+              }
+
+              const appendValueRemote = {
+                node: targetNode[1],
+                service: 'mem',
+                method: 'append',
+              };
+              const appendValueMessage = [value, { key, gid: mrID }];
+
+              globalThis.distribution.local.comm.send(
+                appendValueMessage,
+                appendValueRemote,
+                (appendError) => {
+                  if (finished) {
+                    return;
+                  }
+
+                  if (appendError) {
+                    finished = true;
+                    return callback(appendError, null);
+                  }
+
+                  pending--;
+                  if (pending === 0) {
+                    return globalThis.distribution.local.store.del(`${mrID}_map`, () => {
+                      callback(null, mappedValues);
+                    });
+                  }
+                },
+              );
+            });
+          });
+        });
       },
       reduce: function (
           /** @type {string} */ gid,
@@ -179,77 +275,138 @@ function mr(config) {
           /** @type {Callback} */ callback,
       ) {
         // Fetch grouped values from local store, apply reducer, and return final output.
-        distribution.local.store.get({ gid: gid, key: null }, (e, v) => {
-          if (e) return callback(e, null);
-          const res = [];
-          const reduceStep = (idx) => {
-            if (idx == v.length) {
-              // console.log(res);
-              return callback(null, res);
-            }
-            const key = v[idx];
-            distribution.local.store.get({ gid: gid, key: key }, (e, values) => {
-              distribution.local.routes.get(mrID, (e, f) => {
-                let kv = f.reducer(key, values);
-                res.push(kv);
-                reduceStep(idx + 1);
-              })
-            })
-          }
-          reduceStep(0);
-        })
-      },
-      cleanup: function (
-        gid,
-        mrID,
-        callback,
-      ) {
-        distribution.local.store.get({ gid: gid, key: null }, (e, keys) => {
-          if (e) return callback(e, null);
-          for (const key of keys) {
-            distribution.local.store.del({ gid: gid, key: key }, () => { });
+        return globalThis.distribution.local.mem.get({ key: null, gid: mrID }, (error, keys) => {
+          if (error) {
+            return callback(error, null);
           }
 
-          distribution.local.store.get({ gid: `${mrID}_map`, key: null }, (e, keys) => {
-            for (const key of keys) {
-              distribution.local.store.del({ gid: `${mrID}_map`, key: key }, () => { });
-            }
-          })
-        })
-        return callback(null, true);
-      }
+          if (keys.length === 0) {
+            return callback(null, null);
+          }
+
+          let reducedValues = [];
+          let pending = keys.length;
+          let finished = false;
+
+          keys.forEach((key) => {
+            globalThis.distribution.local.mem.get({ key, gid: mrID }, (getError, values) => {
+              if (finished) {
+                return;
+              }
+
+              if (getError) {
+                finished = true;
+                return callback(getError, null);
+              }
+
+              const reduced = this.reducer(key, values);
+              if (Array.isArray(reduced)) {
+                reducedValues = reducedValues.concat(reduced);
+              } else if (reduced !== null && reduced !== undefined) {
+                reducedValues.push(reduced);
+              }
+
+              return globalThis.distribution.local.mem.del({ key, gid: mrID }, () => {
+                pending--;
+                if (pending === 0) {
+                  return callback(null, reducedValues);
+                }
+              });
+            });
+          });
+        });
+      },
     };
 
 
     // Register the mr service on all nodes in the group and execute in sequence: map, shuffle, reduce.
-    distribution[context.gid].routes.put(mrService, mrID, (e, v) => {
-      // console.log(mrID);
-      console.log("step 1:");
-      distribution[context.gid].comm.send([context.gid, mrID], { service: mrID, method: "map" }, (e, v) => {
-        console.log("step 2:");
-        distribution.local.groups.get(context.gid, (e, v) => {
-          console.log("step 3:");
-          distribution[context.gid].groups.put({ gid: mrGid }, v, (e, v) => {
-            console.log("step 4:");
-            distribution[context.gid].comm.send([mrGid, mrID], { service: mrID, method: "shuffle" }, (e, v) => {
-              console.log("step 5:");
-              distribution[context.gid].comm.send([mrGid, mrID], { service: mrID, method: "reduce" }, (e, v) => {
-                console.log("step 6:");
-                // cleanup
-                distribution[context.gid].comm.send([mrGid, mrID], { service: mrID, method: "cleanup" }, () => {
-                  // distribution[context.gid].groups.del(mrGid, () => {
-                  //   distribution[context.gid].routes.rem(mrID, () => {
-                  const res = Object.values(v).reduce((a, b) => [...a, ...b], []);
-                  callback(null, res);
-                  //   });
-                  // });
-                });
-              })
-            })
-          })
-        })
-      });
-    })
+    return globalThis.distribution.local.groups.get(context.gid, (e, group) => {
+      if (e || !group) {
+        return callback(e || new Error(`unknown group ${context.gid}`), null);
+      }
+
+      const sids = Object.keys(group);
+      if (sids.length === 0) {
+        return callback(new Error(`group '${context.gid}' is empty`), null);
+      }
+      const keyPartitions = partitionKeys(configuration.keys, group);
+
+      const finish = (error, result) => {
+        const phaseError = getError(error);
+        globalThis.distribution[context.gid].routes.rem(mrServiceName, () => {
+          if (phaseError) {
+            return callback(phaseError, null);
+          }
+
+          callback(null, result);
+        });
+      };
+
+      return globalThis.distribution[context.gid].routes.put(
+        mrService,
+        mrServiceName,
+        (putError) => {
+          const registerError = getError(putError);
+          if (registerError) {
+            return finish(registerError, null);
+          }
+
+          let pending = sids.length;
+          let finished = false;
+
+          sids.forEach((sid) => {
+            const remote = {
+              node: group[sid],
+              service: mrServiceName,
+              method: 'map',
+            };
+            const message = [keyPartitions[sid] || [], context.gid, mrID];
+
+            globalThis.distribution.local.comm.send(message, remote, (mapError) => {
+              if (finished) {
+                return;
+              }
+
+              if (mapError) {
+                finished = true;
+                return finish(mapError, null);
+              }
+
+              pending--;
+              if (pending > 0) {
+                return;
+              }
+
+              const shuffleRemote = { service: mrServiceName, method: 'shuffle' };
+              return globalThis.distribution[context.gid].comm.send(
+                [context.gid, mrID],
+                shuffleRemote,
+                (shuffleErrors) => {
+                  const shuffleError = getError(shuffleErrors);
+                  if (shuffleError) {
+                    return finish(shuffleError, null);
+                  }
+
+                  const reduceRemote = { service: mrServiceName, method: 'reduce' };
+                  return globalThis.distribution[context.gid].comm.send(
+                    [context.gid, mrID],
+                    reduceRemote,
+                    (reduceErrors, reduceValues) => {
+                      const reduceError = getError(reduceErrors);
+                      if (reduceError) {
+                        return finish(reduceError, null);
+                      }
+
+                      return finish(null, flattenResults(reduceValues));
+                    },
+                  );
+                },
+              );
+            });
+          });
+        },
+      );
+    });
   }
 
   return { exec };
