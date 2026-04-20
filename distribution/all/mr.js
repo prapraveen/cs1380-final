@@ -220,11 +220,12 @@ function mr(config) {
 
             let pending = pairs.length;
             let finished = false;
+            let nextIdx = 0;
+            const CONCURRENCY = 20;
 
-            pairs.forEach(([key, value]) => {
-              if (finished) {
-                return;
-              }
+            function sendNext() {
+              if (finished || nextIdx >= pairs.length) return;
+              const [key, value] = pairs[nextIdx++];
 
               const kid = globalThis.distribution.util.id.getID(key);
               const targetNid = globalThis.distribution.util.id.naiveHash(kid, nids);
@@ -248,9 +249,7 @@ function mr(config) {
                 appendValueMessage,
                 appendValueRemote,
                 (appendError) => {
-                  if (finished) {
-                    return;
-                  }
+                  if (finished) return;
 
                   if (appendError) {
                     finished = true;
@@ -263,9 +262,14 @@ function mr(config) {
                       callback(null, mappedValues);
                     });
                   }
+                  sendNext();
                 },
               );
-            });
+            }
+
+            for (let i = 0; i < Math.min(CONCURRENCY, pairs.length); i++) {
+              sendNext();
+            }
           });
         });
       },
