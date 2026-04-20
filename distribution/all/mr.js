@@ -131,7 +131,7 @@ function mr(config) {
       ) {
         // Map should read the node's local keys under the mrGid gid and write to store under gid `${mrID}_map`.
         // Expected output: array of objects with a single key per object.
-        keys = keys.slice(0, 1000);
+        keys = keys.slice(0, 250);
         
         if (keys.length === 0) {
           return globalThis.distribution.local.store.put([], `${mrID}_map`, callback);
