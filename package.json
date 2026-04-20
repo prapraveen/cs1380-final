@@ -13,7 +13,7 @@
     "eslint-config-google": "^0.14.0",
     "eslint-plugin-n": "^16.6.2",
     "javascript-obfuscator": "^4.1.0",
-    "jest": "^27.4.7",
+    "jest": "^30.3.0",
     "typescript": "^5.8.3"
   },
   "scripts": {
@@ -25,6 +25,7 @@
   "dependencies": {
     "@brown-ds/distribution": "^0.2.31",
     "html-to-text": "^9.0.5",
+    "jsdom": "^29.0.2",
     "natural": "^8.1.1",
     "yargs": "^17.7.2"
   },

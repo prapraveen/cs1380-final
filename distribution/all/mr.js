@@ -84,16 +84,23 @@ function mr(config) {
           // console.log("all keys: ", v);
           let all_res = [];
           let mapStepCounter = 0;
+          v = v.slice(0,10);
           const totalSteps = v.length;
           if (totalSteps == 0) {
+            console.log("cb 1");
             return callback(null, []);
           }
+          console.log("num keys for", mrGid, "is:", v.length);
           v.forEach((key, index) => {
-            setTimeout(() => {
+              if (index % 5 == 0) {
+                console.log("Reached index", index);
+              }
               // console.log("KEY: ", key);
               distribution.local.store.get({ gid: mrGid, key: key }, (e, value) => {
                 // console.log(mrGid, ": ", value);
+                if (e) console.log("ERROR RETRIEVING FROM STORE:", e);
                 if (value === null) {
+                  console.log("cb 2");
                   return callback(null, []);
                 }
                 // if (e) console.log(e);
@@ -111,8 +118,10 @@ function mr(config) {
                     if (mapStepCounter == totalSteps) {
                       let storeStepCounter = 0;
                       const totalStoreSteps = all_res.length;
+                      console.log("Store steps: ", totalStoreSteps);
                       // console.log("total store steps:", totalStoreSteps);
                       if (storeStepCounter == totalStoreSteps) {
+                        console.log("cb 3");
                         return callback(null, []);
                       }
                       all_res.forEach((kv) => {
@@ -123,6 +132,7 @@ function mr(config) {
                           storeStepCounter++;
                           // console.log("store step counter:", storeStepCounter);
                           if (storeStepCounter == totalStoreSteps) {
+                            console.log("cb 5");
                             return callback(null, all_res);
                           }
                         });
@@ -136,7 +146,6 @@ function mr(config) {
                 })
               })
 
-            }, 0);
           })
         })
       },

@@ -15,6 +15,8 @@ groupA[id.getSID(n1)] = n1;
 groupA[id.getSID(n2)] = n2;
 groupA[id.getSID(n3)] = n3;
 
+
+
 distribution.local.groups.put({ gid: 'page_content', hash: id.naiveHash }, groupA, (e, v) => {
 	distribution.page_content.groups.put({ gid: 'page_content', hash: id.naiveHash }, groupA, (e, v) => {
 
@@ -24,10 +26,12 @@ distribution.local.groups.put({ gid: 'page_content', hash: id.naiveHash }, group
 			console.log(`Indexing ${totalDocs} pages...`);
 
 			const mapper = (hashedURL, page, cb) => {
+                // console.log("1");
 				const path = require('path');
+                // console.log("2");
 				const m6 = path.join(process.cwd(), 'm6', 'c');
 				const { getText } = require(path.join(m6, 'getText.js'));
-				const { processText } = require(path.join(m6, 'process.js'));
+				const { processText, filterStopWords } = require(path.join(m6, 'process.js'));
 				const { stemTerms } = require(path.join(m6, 'stem.js'));
 
 				const { url, body } = page;
@@ -35,7 +39,10 @@ distribution.local.groups.put({ gid: 'page_content', hash: id.naiveHash }, group
 				const stopwords = path.join(process.cwd(), 'm6', 'd', 'stopwords.txt');
 				const text = getText(body);
 				const filtered = processText(text, stopwords);
-				const terms = stemTerms(filtered);
+				let terms = stemTerms(filtered);
+                terms = filterStopWords(terms, stopwords);
+                // terms = terms.slice(0,100);
+                // console.log(terms);
 
 				if (terms.length === 0) return cb([]);
 
@@ -57,6 +64,11 @@ distribution.local.groups.put({ gid: 'page_content', hash: id.naiveHash }, group
 						counts[trigram] = (counts[trigram] || 0) + 1;
 						total += 1;
 					}
+
+                    if (Object.keys(counts).length >= 100) {
+                        console.log(Object.keys(counts));
+                        break;
+                    }
 				}
 
 				const res = Object.entries(counts).map(([term, count]) => ({
@@ -88,7 +100,7 @@ distribution.local.groups.put({ gid: 'page_content', hash: id.naiveHash }, group
 					})
 					.sort();
 
-				const outPath = path.join(process.cwd(), 'm6/d/global-index.txt');
+				const outPath = path.join(process.cwd(), 'd/global-index.txt');
 				fs.writeFileSync(outPath, lines.join('\n') + '\n');
 				console.log(`Done in ${((performance.now() - start) / 1000).toFixed(1)}s — ${results.length} terms indexed.`);
 			});

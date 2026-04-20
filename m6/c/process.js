@@ -17,4 +17,14 @@ function processText(text, stopwordsPath) {
     .filter(w => w.length > 0 && !stopwords.has(w));
 }
 
-module.exports = { processText };
+function filterStopWords(terms, stopwordsPath) {
+	if (!stopwords) {
+		stopwords = new Set(
+			fs.readFileSync(stopwordsPath, 'utf-8').split('\n').map(w => w.trim()).filter(Boolean)
+		);
+	}
+    
+    return terms.filter(w => w.length > 0 && !stopwords.has(w))
+}
+
+module.exports = { processText, filterStopWords };
