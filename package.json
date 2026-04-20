@@ -24,6 +24,8 @@
   "license": "ISC",
   "dependencies": {
     "@brown-ds/distribution": "^0.2.31",
+    "html-to-text": "^9.0.5",
+    "natural": "^8.1.1",
     "yargs": "^17.7.2"
   },
   "report": [
@@ -37,33 +39,49 @@
         "ssd-gb": 512
       },
       "throughput": {
-        "dev": [38843],
-        "aws": [13084]
+        "dev": [
+          38843
+        ],
+        "aws": [
+          13084
+        ]
       },
       "latency": {
-        "dev": [1.405],
-        "aws": [5.27]
+        "dev": [
+          1.405
+        ],
+        "aws": [
+          5.27
+        ]
       },
       "dloc": 2500
     },
     {
-        "milestone": "M2",
-        "hours": 7,
-        "loc": 225,
-        "dev": {
-            "cpu-no": "m3",
-            "mem-gb": 16,
-            "ssd-gb": 512
-        },
-        "throughput": {
-            "dev": [37594],
-            "aws": [6849]
-        },
-        "latency": {
-            "dev": [0.000146],
-            "aws": [0.0000266]
-        },
-        "dloc": 2300
+      "milestone": "M2",
+      "hours": 7,
+      "loc": 225,
+      "dev": {
+        "cpu-no": "m3",
+        "mem-gb": 16,
+        "ssd-gb": 512
+      },
+      "throughput": {
+        "dev": [
+          37594
+        ],
+        "aws": [
+          6849
+        ]
+      },
+      "latency": {
+        "dev": [
+          0.000146
+        ],
+        "aws": [
+          0.0000266
+        ]
+      },
+      "dloc": 2300
     },
     {
       "milestone": "M3",
@@ -94,12 +112,20 @@
         "ssd-gb": 512
       },
       "throughput": {
-        "dev": [2695],
-        "aws": [637]
+        "dev": [
+          2695
+        ],
+        "aws": [
+          637
+        ]
       },
       "latency": {
-        "dev": [0.000371],
-        "aws": [0.00157]
+        "dev": [
+          0.000371
+        ],
+        "aws": [
+          0.00157
+        ]
       },
       "dloc": 2000
     },
@@ -113,11 +139,15 @@
         "ssd-gb": 512
       },
       "throughput": {
-        "dev": [75507],
+        "dev": [
+          75507
+        ],
         "aws": []
       },
       "latency": {
-        "dev": [0.00001324],
+        "dev": [
+          0.00001324
+        ],
         "aws": []
       },
       "dloc": -99

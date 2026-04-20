@@ -70,7 +70,7 @@ function mr(config) {
     const mrService = {
       mapper: configuration.map,
       reducer: configuration.reduce,
-      map: function(
+      map: function (
           /** @type {string} */ mrGid,
           /** @type {string} */ mrID,
           /** @type {Callback} */ callback,
@@ -78,7 +78,7 @@ function mr(config) {
         // Map should read the node's local keys under the mrGid gid and write to store under gid `${mrID}_map`.
         // Expected output: array of objects with a single key per object.
         // console.log("entered map");
-        distribution.local.store.get({gid: mrGid, key: null}, (e, v) => {
+        distribution.local.store.get({ gid: mrGid, key: null }, (e, v) => {
           // v = v.slice(0, 100);
           if (e) return callback(e, v);
           // console.log("all keys: ", v);
@@ -91,7 +91,7 @@ function mr(config) {
           v.forEach((key, index) => {
             setTimeout(() => {
               // console.log("KEY: ", key);
-              distribution.local.store.get({gid: mrGid, key: key}, (e, value) => {
+              distribution.local.store.get({ gid: mrGid, key: key }, (e, value) => {
                 // console.log(mrGid, ": ", value);
                 if (value === null) {
                   return callback(null, []);
@@ -117,15 +117,15 @@ function mr(config) {
                       }
                       all_res.forEach((kv) => {
                         // setTimeout(() => {
-                          const k = Object.keys(kv)[0];
-                          const v = Object.values(kv)[0];
-                          distribution.local.store.append(v, {gid: `${mrID}_map`, key: k}, (e, v) => {
-                            storeStepCounter++;
-                            // console.log("store step counter:", storeStepCounter);
-                            if (storeStepCounter == totalStoreSteps) {
-                              return callback(null, all_res);
-                            }
-                          });
+                        const k = Object.keys(kv)[0];
+                        const v = Object.values(kv)[0];
+                        distribution.local.store.append(v, { gid: `${mrID}_map`, key: k }, (e, v) => {
+                          storeStepCounter++;
+                          // console.log("store step counter:", storeStepCounter);
+                          if (storeStepCounter == totalStoreSteps) {
+                            return callback(null, all_res);
+                          }
+                        });
                         // }, 100);
                       })
                     }
@@ -136,18 +136,18 @@ function mr(config) {
                 })
               })
 
-            }, index * 300);
+            }, 0);
           })
         })
       },
-      shuffle: function(
+      shuffle: function (
           /** @type {string} */ gid,
           /** @type {string} */ mrID,
           /** @type {Callback} */ callback,
       ) {
         // Fetch the mapped values from the local store
         // Shuffle groups values by key (via store.append).
-        distribution.local.store.get({gid: `${mrID}_map`, key: null}, (e, v) => {
+        distribution.local.store.get({ gid: `${mrID}_map`, key: null }, (e, v) => {
           if (e) return callback(e, null);
           const appendStep = (idx) => {
             if (idx == v.length) {
@@ -155,7 +155,7 @@ function mr(config) {
             }
 
             const key = v[idx];
-            distribution.local.store.get({gid: `${mrID}_map`, key: key}, (e, val) => {
+            distribution.local.store.get({ gid: `${mrID}_map`, key: key }, (e, val) => {
               distribution[gid].store.append(val, key, (e, v) => {
                 appendStep(idx + 1);
               })
@@ -164,13 +164,13 @@ function mr(config) {
           appendStep(0);
         })
       },
-      reduce: function(
+      reduce: function (
           /** @type {string} */ gid,
           /** @type {string} */ mrID,
           /** @type {Callback} */ callback,
       ) {
         // Fetch grouped values from local store, apply reducer, and return final output.
-        distribution.local.store.get({gid: gid, key: null}, (e, v) => {
+        distribution.local.store.get({ gid: gid, key: null }, (e, v) => {
           if (e) return callback(e, null);
           const res = [];
           const reduceStep = (idx) => {
@@ -179,7 +179,7 @@ function mr(config) {
               return callback(null, res);
             }
             const key = v[idx];
-            distribution.local.store.get({gid: gid, key: key}, (e, values) => {
+            distribution.local.store.get({ gid: gid, key: key }, (e, values) => {
               distribution.local.routes.get(mrID, (e, f) => {
                 let kv = f.reducer(key, values);
                 res.push(kv);
@@ -190,20 +190,20 @@ function mr(config) {
           reduceStep(0);
         })
       },
-      cleanup: function(
+      cleanup: function (
         gid,
         mrID,
         callback,
       ) {
-        distribution.local.store.get({gid: gid, key: null}, (e, keys) => {
+        distribution.local.store.get({ gid: gid, key: null }, (e, keys) => {
           if (e) return callback(e, null);
           for (const key of keys) {
-            distribution.local.store.del({gid: gid, key: key}, () => {});
+            distribution.local.store.del({ gid: gid, key: key }, () => { });
           }
 
-          distribution.local.store.get({gid: `${mrID}_map`, key: null}, (e, keys) => {
+          distribution.local.store.get({ gid: `${mrID}_map`, key: null }, (e, keys) => {
             for (const key of keys) {
-              distribution.local.store.del({gid: `${mrID}_map`, key: key}, () => {});
+              distribution.local.store.del({ gid: `${mrID}_map`, key: key }, () => { });
             }
           })
         })
@@ -215,23 +215,23 @@ function mr(config) {
     // Register the mr service on all nodes in the group and execute in sequence: map, shuffle, reduce.
     distribution[context.gid].routes.put(mrService, mrID, (e, v) => {
       // console.log(mrID);
-        console.log("step 1:");
-      distribution[context.gid].comm.send([context.gid, mrID], {service: mrID, method: "map"}, (e, v) => {
+      console.log("step 1:");
+      distribution[context.gid].comm.send([context.gid, mrID], { service: mrID, method: "map" }, (e, v) => {
         console.log("step 2:");
         distribution.local.groups.get(context.gid, (e, v) => {
-            console.log("step 3:");
-          distribution[context.gid].groups.put({gid: mrGid}, v, (e, v) => {
-              console.log("step 4:");
-            distribution[context.gid].comm.send([mrGid, mrID], {service: mrID, method: "shuffle"}, (e, v) => {
-                console.log("step 5:");
-              distribution[context.gid].comm.send([mrGid, mrID], {service: mrID, method: "reduce"}, (e, v) => {
-                  console.log("step 6:");
+          console.log("step 3:");
+          distribution[context.gid].groups.put({ gid: mrGid }, v, (e, v) => {
+            console.log("step 4:");
+            distribution[context.gid].comm.send([mrGid, mrID], { service: mrID, method: "shuffle" }, (e, v) => {
+              console.log("step 5:");
+              distribution[context.gid].comm.send([mrGid, mrID], { service: mrID, method: "reduce" }, (e, v) => {
+                console.log("step 6:");
                 // cleanup
-                distribution[context.gid].comm.send([mrGid, mrID], {service: mrID, method: "cleanup"}, () => {
+                distribution[context.gid].comm.send([mrGid, mrID], { service: mrID, method: "cleanup" }, () => {
                   // distribution[context.gid].groups.del(mrGid, () => {
                   //   distribution[context.gid].routes.rem(mrID, () => {
-                      const res = Object.values(v).reduce((a, b) => [...a, ...b], []);
-                      callback(null, res);
+                  const res = Object.values(v).reduce((a, b) => [...a, ...b], []);
+                  callback(null, res);
                   //   });
                   // });
                 });
@@ -243,7 +243,7 @@ function mr(config) {
     })
   }
 
-  return {exec};
+  return { exec };
 }
 
 module.exports = mr;
