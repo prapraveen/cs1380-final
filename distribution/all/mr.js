@@ -131,8 +131,6 @@ function mr(config) {
       ) {
         // Map should read the node's local keys under the mrGid gid and write to store under gid `${mrID}_map`.
         // Expected output: array of objects with a single key per object.
-        keys = keys.slice(0, 100);
-        
         if (keys.length === 0) {
           return globalThis.distribution.local.store.put([], `${mrID}_map`, callback);
         }
@@ -218,14 +216,14 @@ function mr(config) {
               return globalThis.distribution.util.id.getNID(node);
             });
 
-            let pending = pairs.length;
+            const CONCURRENCY = 200;
+            let index = 0;
+            let inFlight = 0;
+            let completed = 0;
             let finished = false;
+            const total = pairs.length;
 
-            pairs.forEach(([key, value]) => {
-              if (finished) {
-                return;
-              }
-
+            function sendOne(key, value, done) {
               const kid = globalThis.distribution.util.id.getID(key);
               const targetNid = globalThis.distribution.util.id.naiveHash(kid, nids);
               const targetNode = entries.find(([, node]) => {
@@ -233,8 +231,7 @@ function mr(config) {
               });
 
               if (!targetNode) {
-                finished = true;
-                return callback(new Error('unknown target node'), null);
+                return done(new Error('unknown target node'));
               }
 
               const appendValueRemote = {
@@ -244,28 +241,32 @@ function mr(config) {
               };
               const appendValueMessage = [value, { key, gid: mrID }];
 
-              globalThis.distribution.local.comm.send(
-                appendValueMessage,
-                appendValueRemote,
-                (appendError) => {
-                  if (finished) {
-                    return;
-                  }
+              globalThis.distribution.local.comm.send(appendValueMessage, appendValueRemote, done);
+            }
 
+            function dispatch() {
+              while (inFlight < CONCURRENCY && index < total) {
+                const [key, value] = pairs[index++];
+                inFlight++;
+                sendOne(key, value, (appendError) => {
+                  if (finished) return;
                   if (appendError) {
                     finished = true;
                     return callback(appendError, null);
                   }
-
-                  pending--;
-                  if (pending === 0) {
+                  inFlight--;
+                  completed++;
+                  if (completed === total) {
                     return globalThis.distribution.local.store.del(`${mrID}_map`, () => {
                       callback(null, mappedValues);
                     });
                   }
-                },
-              );
-            });
+                  dispatch();
+                });
+              }
+            }
+
+            dispatch();
           });
         });
       },

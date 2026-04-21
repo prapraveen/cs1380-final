@@ -31,17 +31,17 @@ const readline = require("readline");
 const path = require('path');
 // const path = require('path');
 
-const indexFile = 'd/global-index.txt';
+const indexFile = 'm6/d/global-index.txt';
 const indexData = fs.readFileSync(indexFile, 'utf-8');
 
 function query(args) {
   // const query = args.join(' ');
   const query = args;
   // const processedQuery = execSync(`echo "${query}" | ./c/process.sh | ./c/stem.js`, {encoding: 'utf-8'}).trim();
-  const m6 = path.join(process.cwd(), 'c');
+  const m6 = path.join(process.cwd(), 'm6', 'c');
   const { processText } = require(path.join(m6, 'process.js'));
   const { stemTerms } = require(path.join(m6, 'stem.js'));
-  let processedQuery = processText(query, 'd/stopwords.txt');
+  let processedQuery = processText(query, 'm6/d/stopwords.txt');
   processedQuery = stemTerms(processedQuery);
   processedQuery = processedQuery.join(' ');
   const terms = processedQuery.split(/\s+/).filter((term) => term.length > 0);
