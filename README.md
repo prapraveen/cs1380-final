@@ -334,3 +334,87 @@ My distributed grep can sustain 75507 lines/second, with an average latency of 0
 ## Key Feature
 
 > Which extra features did you implement and how?
+
+
+# M6: Cloud Deployment
+
+## Summary
+
+For M6, we combined the best parts of our previous milestones into a distributed search engine. The final system uses our distributed computing framework to crawl Wikipedia pages, store page content persistently, build an inverted index, and rank query results using TF-IDF.
+
+Our crawler was seeded with `https://en.wikipedia.org/wiki/Distributed_computing`. We ran the crawler in repeated MapReduce steps. One crawler step is a MapReduce over the `urls_queue` store:
+
+1. Each node receives the URLs it is responsible for.
+2. The node downloads those pages.
+3. The node stores page content in the persistent `page_content` store.
+4. The node extracts new URLs from the HTML.
+5. Newly discovered URLs are added back to `urls_queue`.
+
+We repeted this process 3 times and crawled about 57k pages, totaling over 10GB of page content, in around 2 hours. We also changed MapReduce map execution to support asynch mappers, which allowed several HTTP requests to run at once instead of crawling every URL sequentially.
+
+## Simple Component Map
+
+The distributed framework is in `distribution/`. 
+
+- `distribution/local/comm.js`: sends HTTP messages between nodes.
+- `distribution/local/store.js`: stores local persistent key-value data.
+- `distribution/all/store.js`: shards store operations across nodes.
+- `distribution/all/groups.js`: manages distributed node groups.
+- `distribution/all/mr.js`: runs distributed MapReduce jobs.
+- `distribution/util/id.js`: hashes nodes and URL keys.
+
+The M6 search engine is in `m6/` with components below
+
+- `m6/crawl.js`: main distributed crawler using `urls_queue` and `page_content`.
+- `m6/crawl-final-step.js`: final crawl pass that fetches queued URLs without adding new URLs.
+- `m6/index.js`: MapReduce indexer over `page_content`.
+- `m6/c/getText.js`: extracts readable text from HTML.
+- `m6/c/process.js`: filters and normalizes words.
+- `m6/c/stem.js`: stems words.
+- `m6/d/global-index.txt`: output inverted index.
+
+The old M0 baseline is in `non-distribution/`.
+
+## Indexing and Querying
+
+Indexing is implemented as a MapReduce job over the `page_content` store. In the map phase, each node reads its local pages, extracts text from HTML, processes and stems the words, and computes relative frequencies. In the reduce phase, the system computes TF-IDF values and uses them to build the inverted index. 
+
+Querying is similar to M0, except results are ranked using TF-IDF. The query script loads the inverted index into an in-memory hashmap, processes and stems the user's query, looks it up in the map, and returns relevant URLs sorted by score.
+
+## Fault Tolerance
+
+The crawling subsystem is fairly fault tolerant because the important state is stored persistently. The queue of URLs to crawl is stored in `urls_queue` and fetched pages are stored in `page_content`. This means the crawler can be stopped and resumed without starting completely from scratch. Crash recovery during indexing is harder, but still partially supported because intermediate MapReduce state is stored persistently. 
+
+## Correctness and Performance
+
+We characterized correctness by checking the end-to-end flow: pages should be crawled, page content should be stored, the indexer should produce terms from those pages, and queries should return relevant URLs. We also compared the final pipeline against M0, which gave us a simpler baseline for crawl, index, and query behavior.
+
+The main performance result was that distributed processing introduced a lot of overhead, especially in distributed storage. Crawling and indexing require thousands of records to move between nodes, and MapReduce requires shuffle steps that M0 did not have. For small workloads, this overhead can make the distributed version slower than the sequential version.
+
+However, as the number of nodes increased, the benefits of parallel processing started to show. The distributed version is more complex, but it can divide crawling and indexing work across nodes instead of forcing one process to do everything sequentially.
+
+## Reflection
+
+Preparing the poster made us focus on the actual system story instead of just the individual milestones. The main surpirse for us was that distributed crawling and indexing on AWS took significantly longer than expected, despite parallelism. While we anticipated speedups from multiple nodes, in practice we encountered network latency between nodes, overhead from coordination and communication, slower remote I/O compared to local execution, etc. 
+
+Another surprise was the performance comparison. We expected the distributed indexer to clearly beat M0, but the result was more complicated. M0 is much simpler and avoids network overhead. M6 does more work, including persistent distributed storage, shuffling, and TF-IDF ranking. This made the final conclusion more realistic: distributed systems are not automatically faster, but they give a path to scale once the workload is large enough. 
+
+## Hours
+
+Hours: approximately 20-25 team-hours for M6.
+
+This includes integration, crawler work, indexing work, AWS deployment, performance measurements, poster preparation, and debugging.
+
+## Lines of Code
+
+DLoC: approximately 3000 lines across `distribution/` and `m6/`.
+
+The distributed version is much larger because it needs communication, routing, group membership, hashing, persistent sharded storage, and MapReduce orchestration. The M0 version can mostly rely on local files and shell pipelines.
+
+## Team Differences
+
+Different team members naturally contributed different amounts of code because the tasks were different sizes. Text processing and query logic were smaller but still important. Crawling, distributed storage, MapReduce, AWS deployment, and performance debugging required more infrastructure work. A lot of the M6 effort was not just writing code, but making interfaces line up across components, communicating findings, merging components, etc
+
+## Conclusion
+
+M6 showed the full tradeoff of moving from a centralized search engine to a distributed one. The centralized M0 version was simpler and faster for small inputs. The distributed version was harder to build and had more overhead, but it could crawl and process much more data by spreading work across nodes. Overall, the project showed that distribution is useful for scalability - but only after dealing with the real costs of coordination, fault tolernace, and debugging.
