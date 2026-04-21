@@ -6,16 +6,14 @@ const { performance } = require('node:perf_hooks');
 
 const id = distribution.util.id;
 
-const n1 = { ip: '127.0.0.1', port: 8000 };
-const n2 = { ip: '127.0.0.1', port: 8001 };
-const n3 = { ip: '127.0.0.1', port: 8002 };
+const n1 = { ip: '54.89.198.234', port: 8080 };
+const n2 = { ip: '107.20.45.31', port: 8080 };
+const n3 = { ip: '52.91.67.55', port: 8080 };
 
 const groupA = {};
 groupA[id.getSID(n1)] = n1;
 groupA[id.getSID(n2)] = n2;
 groupA[id.getSID(n3)] = n3;
-
-
 
 distribution.local.groups.put({ gid: 'page_content', hash: id.naiveHash }, groupA, (e, v) => {
 	distribution.page_content.groups.put({ gid: 'page_content', hash: id.naiveHash }, groupA, (e, v) => {
@@ -25,7 +23,7 @@ distribution.local.groups.put({ gid: 'page_content', hash: id.naiveHash }, group
 			const totalDocs = keys.length;
 			console.log(`Indexing ${totalDocs} pages...`);
 
-			const mapper = (hashedURL, page) => {
+			const mapper = (hashedURL, page, cb) => {
 				const path = require('path');
 				const m6 = path.join(process.cwd(), 'm6', 'c');
 				const { getText } = require(path.join(m6, 'getText.js'));
@@ -37,10 +35,9 @@ distribution.local.groups.put({ gid: 'page_content', hash: id.naiveHash }, group
 				const stopwords = path.join(process.cwd(), 'm6', 'd', 'stopwords.txt');
 				const text = getText(body);
 				const filtered = processText(text, stopwords);
-				const terms = stemTerms(filtered);
-					// .slice(0, 100);
+				const terms = stemTerms(filtered).slice(0, 150);
 
-				if (terms.length === 0) return [];
+				if (terms.length === 0) return cb([]);
 
 				const counts = Object.create(null);
 				const totalTerms = terms.length;
@@ -51,13 +48,11 @@ distribution.local.groups.put({ gid: 'page_content', hash: id.naiveHash }, group
 				const res = Object.entries(counts).map(([term, tf]) => ({
 					[term]: { [url]: tf },
 				}));
-				return res;
+				cb(res);
 			};
 
 			const reducer = eval(`(key, values) => {
-				if (!Array.isArray(values) || values.length === 0) {
-					return null;
-				}
+				if (!Array.isArray(values) || values.length === 0) return null;
 				const idf = Math.log10(${totalDocs} / values.length);
 				const result = {};
 				for (const val of values) {
@@ -65,11 +60,12 @@ distribution.local.groups.put({ gid: 'page_content', hash: id.naiveHash }, group
 					const tf = Object.values(val)[0];
 					result[url] = Math.round(tf * idf * 1000) / 1000;
 				}
-				return {[key]: result};
+				return { [key]: result };
 			}`);
 
 			const start = performance.now();
-			distribution.page_content.mr.exec({ keys, map: mapper, reduce: reducer }, (e, results) => {
+
+			distribution.page_content.mr.exec({ map: mapper, reduce: reducer }, (e, results) => {
 				if (e) { console.error(e); process.exit(1); }
 
 				const lines = results
@@ -83,7 +79,11 @@ distribution.local.groups.put({ gid: 'page_content', hash: id.naiveHash }, group
 
 				const outPath = path.join(process.cwd(), 'm6', 'd', 'global-index.txt');
 				fs.writeFileSync(outPath, lines.join('\n') + '\n');
-				console.log(`Done in ${((performance.now() - start) / 1000).toFixed(1)}s — ${results.length} terms indexed.`);
+
+				const seconds = (performance.now() - start) / 1000;
+				console.log(`latency: ${seconds.toFixed(2)} s`);
+				console.log(`doc throughput: ${(totalDocs / seconds).toFixed(2)} docs/s`);
+				console.log(`term throughput: ${(lines.length / seconds).toFixed(2)} terms/s`);
 			});
 		});
 	});
