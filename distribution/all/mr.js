@@ -129,38 +129,100 @@ function mr(config) {
           /** @type {string} */ mrID,
           /** @type {Callback} */ callback,
       ) {
+        // Map should read the node's local keys under the mrGid gid and write to store under gid `${mrID}_map`.
+        // Expected output: array of objects with a single key per object.
         if (keys.length === 0) {
-          return callback(null, []);
+          return globalThis.distribution.local.store.put([], `${mrID}_map`, callback);
         }
 
-        return globalThis.distribution.local.groups.get(gid, (groupError, group) => {
-          if (groupError || !group) {
-            return callback(groupError || new Error(`unknown group ${gid}`), null);
+        const mappedValues = [];
+        let pending = keys.length;
+        let finished = false;
+
+        keys.forEach((key) => {
+          const localConfig = { key, gid };
+          globalThis.distribution.local.store.get(localConfig, (localError, localValue) => {
+            const onValue = (error, value) => {
+              if (finished) {
+                return;
+              }
+
+              if (error) {
+                finished = true;
+                return callback(error, null);
+              }
+
+              const mapped = this.mapper(key, value);
+              if (Array.isArray(mapped)) {
+                mappedValues.push(...mapped);
+              } else if (mapped !== null && mapped !== undefined) {
+                mappedValues.push(mapped);
+              }
+
+              pending--;
+              if (pending === 0) {
+                return globalThis.distribution.local.store.put(
+                  mappedValues,
+                  `${mrID}_map`,
+                  callback,
+                );
+              }
+            };
+
+            if (!localError) {
+              return onValue(null, localValue);
+            }
+
+            return globalThis.distribution[gid].store.get(key, onValue);
+          });
+        });
+      },
+      shuffle: function (
+          /** @type {string} */ gid,
+          /** @type {string} */ mrID,
+          /** @type {Callback} */ callback,
+      ) {
+        // Fetch the mapped values from the local store
+        // Shuffle groups values by key (via store.append).
+        return globalThis.distribution.local.store.get(`${mrID}_map`, (error, mappedValues) => {
+          if (error) {
+            return callback(error, null);
           }
 
-          const entries = Object.entries(group);
-          const nids = entries.map(([, node]) => globalThis.distribution.util.id.getNID(node));
+          const pairs = ([]);
+          mappedValues.forEach((mappedValue) => {
+            if (!mappedValue || typeof mappedValue !== 'object') {
+              return;
+            }
 
-          const MAP_CONCURRENCY = 5;
-          const PAIR_CONCURRENCY = 200;
-          let docIndex = 0;
-          let docInFlight = 0;
-          let docsCompleted = 0;
-          let pairsInFlight = 0;
-          const pairsQueue = [];
-          let finished = false;
-          const total = keys.length;
+            Object.entries(mappedValue).forEach(([key, value]) => {
+              pairs.push([key, value]);
+            });
+          });
 
-          const finish = (err) => {
-            if (finished) return;
-            finished = true;
-            callback(err || null, err ? null : []);
-          };
+          if (pairs.length === 0) {
+            return globalThis.distribution.local.store.del(`${mrID}_map`, () => {
+              callback(null, mappedValues);
+            });
+          }
 
-          const flushPairs = () => {
-            while (pairsInFlight < PAIR_CONCURRENCY && pairsQueue.length > 0) {
-              const { key, value, onSent } = pairsQueue.shift();
-              pairsInFlight++;
+          return globalThis.distribution.local.groups.get(gid, (groupError, group) => {
+            if (groupError || !group) {
+              return callback(groupError || new Error(`unknown group ${gid}`), null);
+            }
+
+            const entries = Object.entries(group);
+            const nids = entries.map(([, node]) => {
+              return globalThis.distribution.util.id.getNID(node);
+            });
+
+            let pending = pairs.length;
+            let finished = false;
+
+            pairs.forEach(([key, value]) => {
+              if (finished) {
+                return;
+              }
 
               const kid = globalThis.distribution.util.id.getID(key);
               const targetNid = globalThis.distribution.util.id.naiveHash(kid, nids);
@@ -169,88 +231,41 @@ function mr(config) {
               });
 
               if (!targetNode) {
-                pairsInFlight--;
-                return finish(new Error('unknown target node'));
+                finished = true;
+                return callback(new Error('unknown target node'), null);
               }
 
+              const appendValueRemote = {
+                node: targetNode[1],
+                service: 'mem',
+                method: 'append',
+              };
+              const appendValueMessage = [value, { key, gid: mrID }];
+
               globalThis.distribution.local.comm.send(
-                [value, { key, gid: mrID }],
-                { node: targetNode[1], service: 'mem', method: 'append' },
-                (sendError) => {
-                  pairsInFlight--;
-                  onSent(sendError);
-                  if (!finished) flushPairs();
-                },
-              );
-            }
-          };
-
-          const mapNext = () => {
-            while (!finished && docIndex < total && docInFlight < MAP_CONCURRENCY) {
-              const key = keys[docIndex++];
-              docInFlight++;
-              const localConfig = { key, gid };
-
-              globalThis.distribution.local.store.get(localConfig, (localError, localValue) => {
-                const onValue = (error, value) => {
-                  if (finished) return;
-                  if (error) return finish(error);
-
-                  const mapped = this.mapper(key, value);
-                  docInFlight--;
-                  mapNext();
-
-                  const pairs = [];
-                  if (Array.isArray(mapped)) {
-                    for (const obj of mapped) {
-                      if (obj && typeof obj === 'object') {
-                        for (const [k, v] of Object.entries(obj)) pairs.push([k, v]);
-                      }
-                    }
-                  } else if (mapped && typeof mapped === 'object') {
-                    for (const [k, v] of Object.entries(mapped)) pairs.push([k, v]);
-                  }
-
-                  if (pairs.length === 0) {
-                    docsCompleted++;
-                    if (docsCompleted === total) finish(null);
+                appendValueMessage,
+                appendValueRemote,
+                (appendError) => {
+                  if (finished) {
                     return;
                   }
 
-                  let pairsLeft = pairs.length;
-                  for (const [k, v] of pairs) {
-                    pairsQueue.push({
-                      key: k,
-                      value: v,
-                      onSent: (sendError) => {
-                        if (finished) return;
-                        if (sendError) return finish(sendError);
-                        pairsLeft--;
-                        if (pairsLeft === 0) {
-                          docsCompleted++;
-                          if (docsCompleted === total) finish(null);
-                        }
-                      },
+                  if (appendError) {
+                    finished = true;
+                    return callback(appendError, null);
+                  }
+
+                  pending--;
+                  if (pending === 0) {
+                    return globalThis.distribution.local.store.del(`${mrID}_map`, () => {
+                      callback(null, mappedValues);
                     });
                   }
-                  flushPairs();
-                };
-
-                if (!localError) return onValue(null, localValue);
-                return globalThis.distribution[gid].store.get(key, onValue);
-              });
-            }
-          };
-
-          mapNext();
+                },
+              );
+            });
+          });
         });
-      },
-      shuffle: function (
-          /** @type {string} */ gid,
-          /** @type {string} */ mrID,
-          /** @type {Callback} */ callback,
-      ) {
-        callback(null, []);
       },
       reduce: function (
           /** @type {string} */ gid,
@@ -267,43 +282,36 @@ function mr(config) {
             return callback(null, null);
           }
 
-          const reducedValues = [];
-          const REDUCE_CONCURRENCY = 20;
-          let reduceIndex = 0;
-          let reduceInFlight = 0;
-          let reduceDone = 0;
+          let reducedValues = [];
+          let pending = keys.length;
           let finished = false;
 
-          const reduceDispatch = () => {
-            while (!finished && reduceInFlight < REDUCE_CONCURRENCY && reduceIndex < keys.length) {
-              const key = keys[reduceIndex++];
-              reduceInFlight++;
+          keys.forEach((key) => {
+            globalThis.distribution.local.mem.get({ key, gid: mrID }, (getError, values) => {
+              if (finished) {
+                return;
+              }
 
-              globalThis.distribution.local.mem.get({ key, gid: mrID }, (getError, values) => {
-                if (finished) return;
-                if (getError) {
-                  finished = true;
-                  return callback(getError, null);
+              if (getError) {
+                finished = true;
+                return callback(getError, null);
+              }
+
+              const reduced = this.reducer(key, values);
+              if (Array.isArray(reduced)) {
+                reducedValues = reducedValues.concat(reduced);
+              } else if (reduced !== null && reduced !== undefined) {
+                reducedValues.push(reduced);
+              }
+
+              return globalThis.distribution.local.mem.del({ key, gid: mrID }, () => {
+                pending--;
+                if (pending === 0) {
+                  return callback(null, reducedValues);
                 }
-
-                const reduced = this.reducer(key, values);
-                if (Array.isArray(reduced)) {
-                  reducedValues.push(...reduced);
-                } else if (reduced !== null && reduced !== undefined) {
-                  reducedValues.push(reduced);
-                }
-
-                globalThis.distribution.local.mem.del({ key, gid: mrID }, () => {
-                  reduceInFlight--;
-                  reduceDone++;
-                  if (reduceDone === keys.length) return callback(null, reducedValues);
-                  setImmediate(reduceDispatch);
-                });
               });
-            }
-          };
-
-          reduceDispatch();
+            });
+          });
         });
       },
     };
