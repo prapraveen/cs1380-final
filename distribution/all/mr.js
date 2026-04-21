@@ -136,46 +136,48 @@ function mr(config) {
         }
 
         const mappedValues = [];
-        let pending = keys.length;
+        const MAP_CONCURRENCY = 20;
+        let mapIndex = 0;
+        let mapInFlight = 0;
+        let mapCompleted = 0;
         let finished = false;
+        const mapTotal = keys.length;
 
-        keys.forEach((key) => {
-          const localConfig = { key, gid };
-          globalThis.distribution.local.store.get(localConfig, (localError, localValue) => {
-            const onValue = (error, value) => {
-              if (finished) {
-                return;
-              }
-
-              if (error) {
-                finished = true;
-                return callback(error, null);
-              }
-
-              const mapped = this.mapper(key, value);
-              if (Array.isArray(mapped)) {
-                mappedValues.push(...mapped);
-              } else if (mapped !== null && mapped !== undefined) {
-                mappedValues.push(mapped);
-              }
-
-              pending--;
-              if (pending === 0) {
-                return globalThis.distribution.local.store.put(
-                  mappedValues,
-                  `${mrID}_map`,
-                  callback,
-                );
-              }
-            };
-
-            if (!localError) {
-              return onValue(null, localValue);
-            }
-
-            return globalThis.distribution[gid].store.get(key, onValue);
-          });
-        });
+        const mapDispatch = () => {
+          while (mapInFlight < MAP_CONCURRENCY && mapIndex < mapTotal) {
+            const key = keys[mapIndex++];
+            mapInFlight++;
+            const localConfig = { key, gid };
+            globalThis.distribution.local.store.get(localConfig, (localError, localValue) => {
+              const onValue = (error, value) => {
+                if (finished) return;
+                if (error) {
+                  finished = true;
+                  return callback(error, null);
+                }
+                const mapped = this.mapper(key, value);
+                if (Array.isArray(mapped)) {
+                  mappedValues.push(...mapped);
+                } else if (mapped !== null && mapped !== undefined) {
+                  mappedValues.push(mapped);
+                }
+                mapInFlight--;
+                mapCompleted++;
+                if (mapCompleted === mapTotal) {
+                  return globalThis.distribution.local.store.put(
+                    mappedValues,
+                    `${mrID}_map`,
+                    callback,
+                  );
+                }
+                mapDispatch();
+              };
+              if (!localError) return onValue(null, localValue);
+              return globalThis.distribution[gid].store.get(key, onValue);
+            });
+          }
+        };
+        mapDispatch();
       },
       shuffle: function (
           /** @type {string} */ gid,
